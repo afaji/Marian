@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
   std::cerr << "Building model...";
   auto layer1 = tanh(dot(x, w1) + b1);
   auto layer2 = softmax(dot(layer1, w2) + b2, axis=1, name="layer2");
-  auto predict = layer2;
+  auto cost = -mean(sum(y * log(layer2), axis=1), axis=0);
 
   std::cerr << "Done." << std::endl;
 
@@ -85,10 +85,10 @@ int main(int argc, char** argv) {
     xt << tmp;
     x = xt;
 
-    predict.forward(BATCH_SIZE);
+    cost.forward(BATCH_SIZE);
 
     std::vector<float> results(LABEL_SIZE * BATCH_SIZE);
-    results << predict.val();
+    results << layer2.val();
 
     for (size_t i = 0; i < BATCH_SIZE * LABEL_SIZE; i += LABEL_SIZE) {
       size_t correct = 0;
@@ -112,10 +112,10 @@ int main(int argc, char** argv) {
       xt << tmp;
       x = xt;
 
-      predict.forward(endId - startId);
+      cost.forward(endId - startId);
 
       std::vector<float> results(LABEL_SIZE * BATCH_SIZE);
-      results << predict.val();
+      results << layer2.val();
 
       for (size_t i = 0; i < (endId - startId) * LABEL_SIZE; i += LABEL_SIZE) {
         size_t correct = 0;
@@ -129,6 +129,37 @@ int main(int argc, char** argv) {
     }
   }
   std::cerr << "ACC: " << float(acc)/numofdata << std::endl;
+  
+  float eta = 0.1;
+  for (size_t j = 0; j < 10; ++j) {
+    for(size_t i = 0; i < 60; ++i) {    
+      cost.backward();
+    
+      auto update_rule = _1 -= eta * _2;
+      Element(update_rule, w1.val(), w1.grad());
+      Element(update_rule, b1.val(), b1.grad());
+      Element(update_rule, w2.val(), w2.grad());
+      Element(update_rule, b2.val(), b2.grad());
+      
+      cost.forward(BATCH_SIZE);
+    }
+    std::cerr << "Epoch: " << j << std::endl;
+    std::vector<float> results;
+    results << layer2.val();
+    
+    size_t acc = 0;
+    for (size_t i = 0; i < testLabels.size(); i += LABEL_SIZE) {
+      size_t correct = 0;
+      size_t proposed = 0;
+      for (size_t j = 0; j < LABEL_SIZE; ++j) {
+        if (testLabels[i+j]) correct = j;
+        if (results[i + j] > results[i + proposed]) proposed = j;
+      }
+      acc += (correct == proposed);
+    }
+    std::cerr << "Cost: " << cost.val()[0] <<  " - Accuracy: " << float(acc) / BATCH_SIZE << std::endl;
+  }
+
 
   return 0;
 }
