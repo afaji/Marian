@@ -31,69 +31,69 @@
 namespace marian {
 namespace keywords {
 
-  template <unsigned key, typename Value>
-  class Keyword {
-    public:
-      typedef Value value_type;
-      
-      Keyword(const std::string& name, Value value)
-      : name_(name), value_(value) {}
-      
-      Keyword(const std::string& name)
-      : name_(name), value_() {}
-      
-      Keyword<key, Value> operator=(Value value) const {
-        return Keyword<key, Value>(name_, value);
-      }
-    
-      const Value& operator()() const {
-        return value_;
-      }
-      
-    private:
-      const std::string name_;
-      const Value value_;
-  };
-  
-  struct Keywords {
-    Keywords() {}  
-      
-    template <typename ...Args>
-    Keywords(Args ...args) {
-      add(args...); 
+template <unsigned key, typename Value>
+class Keyword {
+  public:
+    typedef Value value_type;
+
+    Keyword(const std::string& name, Value value)
+    : name_(name), value_(value) {}
+
+    Keyword(const std::string& name)
+    : name_(name), value_() {}
+
+    Keyword<key, Value> operator=(Value value) const {
+      return Keyword<key, Value>(name_, value);
     }
-    
-    template <typename Head>
-    void add(Head head) {
-      map_[std::type_index(typeid(head))] = head();
+
+    const Value& operator()() const {
+      return value_;
     }
-    
-    template <typename Head, typename ...Tail>
-    void add(Head head, Tail ...tail) {
-      map_[std::type_index(typeid(head))] = head();
-      add(tail...);
-    }
-    
-    template <typename Value, typename Key>
-    Value Get(Key key, Value default_value) {
-      auto it = map_.find(std::type_index(typeid(key)));
-      if(it != map_.end())
-          return boost::any_cast<Value>(map_[std::type_index(typeid(key))]);
-      else
-          return default_value;
-    }
-    
-    template <typename Key>
-    bool Has(Key key) {
-      auto it = map_.find(std::type_index(typeid(key)));
-      return it != map_.end();
-    }
-    
-    private:
-      std::unordered_map<std::type_index, boost::any> map_;
-  };
-  
-  #include <type_traits>
+
+  private:
+    const std::string name_;
+    const Value value_;
+};
+
+struct Keywords {
+  Keywords() {}
+
+  template <typename ...Args>
+  Keywords(Args ...args) {
+    add(args...);
+  }
+
+  template <typename Head>
+  void add(Head head) {
+    map_[std::type_index(typeid(head))] = head();
+  }
+
+  template <typename Head, typename ...Tail>
+  void add(Head head, Tail ...tail) {
+    map_[std::type_index(typeid(head))] = head();
+    add(tail...);
+  }
+
+  template <typename Value, typename Key>
+  Value Get(Key key, Value default_value) {
+    auto it = map_.find(std::type_index(typeid(key)));
+    if(it != map_.end())
+        return boost::any_cast<Value>(map_[std::type_index(typeid(key))]);
+    else
+        return default_value;
+  }
+
+  template <typename Key>
+  bool Has(Key key) {
+    auto it = map_.find(std::type_index(typeid(key)));
+    return it != map_.end();
+  }
+
+  private:
+    std::unordered_map<std::type_index, boost::any> map_;
+};
+
+#include <type_traits>
 
 //template <typename...>
 //struct is_one_of {
@@ -125,7 +125,7 @@ namespace keywords {
 //template <typename Match, typename ...Args>
 //typename Match::value_type opt(True foo, Args... args) {
 //    std::tuple<const Args...> t(args...);
-//    return std::get<Index<Match, std::tuple<const Args...>>::value>(t)();    
+//    return std::get<Index<Match, std::tuple<const Args...>>::value>(t)();
 //}
 //
 //template <typename Match, typename ...Args>
@@ -140,10 +140,10 @@ namespace keywords {
 //    return opt<Match>(condition, args...);
 //}
 
-  
-  #define KEY(name, value_type) \
-  typedef const Keyword<COMPILE_TIME_CRC32_STR(#name),value_type> name ## _k; \
-  name ## _k name(#name);
-}
 
-}
+#define KEY(name, value_type) \
+typedef const Keyword<COMPILE_TIME_CRC32_STR(#name),value_type> name ## _k; \
+name ## _k name(#name);
+
+} // namespace keywords
+} // namespace marian
