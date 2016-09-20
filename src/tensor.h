@@ -34,39 +34,36 @@
 namespace marian {
 
 /**
- * @brief Debug shape by printing it. 
+ * @brief Debug shape by printing it.
  *
  * @param shape Shape of Tensor.
  *
  * @return String of shape.
  */
-inline std::string Debug(const Shape &shape)
-{
-	std::stringstream strm;
-	strm << shape[0];
-	assert(shape.size());
-	for (size_t i = 1; i < shape.size(); ++i) {
-		strm << "x" << shape[i];
-	}
-	return strm.str();
+inline std::string Debug(const Shape &shape) {
+  std::stringstream strm;
+  strm << shape[0];
+  assert(shape.size());
+  for (size_t i = 1; i < shape.size(); ++i) {
+    strm << "x" << shape[i];
+  }
+  return strm.str();
 }
 
 /**
- * @brief Calculate the vector size based on Tensor shape. 
+ * @brief Calculate the vector size based on Tensor shape.
  *
  * @param shape Shape of Tensor.
  *
  * @return Size of Tensor vector.
  */
-inline size_t GetTotalSize(const Shape &shape)
-{
-	size_t ret = std::accumulate(shape.begin(), shape.end(),
-			  1, std::multiplies<int>());
-	return ret;
+inline size_t GetTotalSize(const Shape &shape) {
+  size_t ret = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
+  return ret;
 }
 
 /**
- * @brief This class manages the Tensor on the GPU. 
+ * @brief This class manages the Tensor on the GPU.
  *
  * @tparam Float Data type.
  */
@@ -88,9 +85,7 @@ class TensorImpl {
      * @param value Value to fill Tensor's vector with.
      */
     TensorImpl(const Shape& shape, value_type value = 0)
-    : shape_(shape), tno_(tensorCounter++)
-    {
-
+    : shape_(shape), tno_(tensorCounter++) {
       // @TODO:
       UTIL_THROW_IF2(shape_.size() != 2,
                      "For now, only 2D Tensors, will be fixed later.");
@@ -204,7 +199,7 @@ class TensorImpl {
      * @param end End iterator of a vector.
      */
     void set(const std::vector<float>::const_iterator &begin, const std::vector<float>::const_iterator &end) {
-	  thrust::copy(begin, end, data_.begin());
+      thrust::copy(begin, end, data_.begin());
     }
 
     /**
@@ -213,34 +208,33 @@ class TensorImpl {
      * @param out Vector to copy data to.
      */
     void get(std::vector<float>::iterator out) {
-	  thrust::copy(data_.begin(), data_.end(), out);      
+      thrust::copy(data_.begin(), data_.end(), out);
     }
-    
+
     /**
      * @brief Debug function.
      *
      * @return Vector in string form.
      */
-    std::string Debug() const
-    {
-    	std::stringstream strm;
-    	assert(shape_.size());
-    	strm << "shape=" << marian::Debug(shape_) << std::endl;
+    std::string Debug() const {
+      std::stringstream strm;
+      assert(shape_.size());
+      strm << "shape=" << marian::Debug(shape_) << std::endl;
 
-    	// values
-    	size_t totSize = GetTotalSize(shape());
-    	std::vector<Float> values(totSize);
-		thrust::copy(data_.begin(), data_.end(), values.begin());
+      // values
+      size_t totSize = GetTotalSize(shape());
+      std::vector<Float> values(totSize);
+      thrust::copy(data_.begin(), data_.end(), values.begin());
 
-		size_t ind = 0;
-		for (size_t i = 0; i < shape()[0]; ++i) {
-			for (size_t j = 0; j < shape()[1]; ++j) {
-				strm << values[ind] << " ";
-				++ind;
-			}
-			strm << std::endl;
-		}
-    	return strm.str();
+      size_t ind = 0;
+      for (size_t i = 0; i < shape()[0]; ++i) {
+        for (size_t j = 0; j < shape()[1]; ++j) {
+          strm << values[ind] << " ";
+          ++ind;
+        }
+        strm << std::endl;
+      }
+      return strm.str();
     }
 };
 
@@ -265,7 +259,7 @@ class Tensor {
     /**
      * @brief Constructor that allocates memory.
      *
-     * @param shape Shape of Tensor. 
+     * @param shape Shape of Tensor.
      * @param value Value to fill Tensor's vector with.
      */
     Tensor(const Shape& shape, value_type value = 0) {
@@ -403,13 +397,12 @@ class Tensor {
      *
      * @return String of Tensor's data.
      */
-    std::string Debug() const
-    {
-    	return pimpl_->Debug();
+    std::string Debug() const {
+      return pimpl_->Debug();
     }
 
     /**
-     * @brief Print Tensor data on CPU (?) (const). 
+     * @brief Print Tensor data on CPU (?) (const).
      */
     void Print() const {
       for (int i = 0; i < size(); ++i) {
@@ -419,7 +412,7 @@ class Tensor {
     }
 
     //void Load(const std::string &path);
-    
+
     /**
      * @brief Set GPU Tensor's vector to values of specified vector.
      *
@@ -442,7 +435,7 @@ class Tensor {
     void get(std::vector<float>::iterator out) const {
       pimpl_->get(out);
     }
-    
+
     /**
      * @brief Copy Tensor's vector from GPU to vector variable on CPU.
      *
