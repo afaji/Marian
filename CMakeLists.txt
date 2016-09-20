@@ -10,7 +10,7 @@ SET(CUDA_PROPAGATE_HOST_FLAGS OFF)
 include_directories(${amunn_SOURCE_DIR})
 find_package(CUDA REQUIRED)
 
-find_package(Boost COMPONENTS system timer)
+find_package(Boost COMPONENTS system serialization timer)
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
     set(EXT_LIBS ${EXT_LIBS} ${Boost_LIBRARIES})

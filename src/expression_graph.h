@@ -23,14 +23,20 @@
 
 #include <map>
 
+#include <boost/serialization/serialization.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/archive/text_iarchive.hpp>
+
 #include "definitions.h"
 #include "chainable.h"
 #include "node_operators.h"
 #include "tensor.h"
 
+
 namespace marian {
 
-// Forward declaration of ExpressionGraph class; this enables it to be used in the following typedef of ExpressionGraphPtr
+// Forward declaration of ExpressionGraph class; this enables it to be used in
+// the following typedef of ExpressionGraphPtr
 class ExpressionGraph;
 
 /** @brief A pointer to an expression graph. */
@@ -39,7 +45,7 @@ typedef ExpressionGraph* ExpressionGraphPtr;
 class Expr {
   public:
     Expr(ExpressionGraphPtr g, Chainable<Tensor>* chainable);
-    
+
     Expr operator=(Tensor t) {
       pimpl_->setVal(t);
       return *this;
@@ -49,7 +55,7 @@ class Expr {
     Tensor grad();
 
     ExpressionGraphPtr graph();
-    
+
     ChainPtr node();
     operator ChainPtr();
 
@@ -61,19 +67,21 @@ class Expr {
 };
 
 /**
- * @brief Represents a computation graph of expressions, over which algorithmic differentiation may be performed.
+ * @brief Represents a computation graph of expressions, over which algorithmic
+ *  differentiation may be performed.
  */
 class ExpressionGraph {
   public:
 
     /** @brief Constructs a new expression graph */
     ExpressionGraph() : stack_(new ChainableStack) {}
-  
+
     /**
      * @brief Performs backpropogation on this expression graph.
      *
      * Backpropogation is implemented by performing first the forward pass
-     *    and then the backward pass of algorithmic differentiation (AD) on the nodes of the graph.
+     *  and then the backward pass of algorithmic differentiation (AD) on the
+     *  nodes of the graph.
      *
      * @param batchSize       XXX Marcin, could you provide a description of this param?
      */
@@ -81,19 +89,20 @@ class ExpressionGraph {
       forward(batchSize);
       backward();
     }
-  
+
     /**
      * @brief Perform the forward pass of algorithmic differentiation (AD) on this graph.
      *
      * This pass traverses the nodes of this graph in the order they were created;
-     *    as each node is traversed, its <code>allocate()</code> method is called.
-     * 
-     * Once allocation is complete for all nodes, this pass again traverses the nodes, in creation order;
-     *    as each node is traversed, its <code>forward()</code> method is called.
+     *  as each node is traversed, its <code>allocate()</code> method is called.
      *
-     * After this method has successfully completed, 
-     *    it is guaranteed that all node allocation has been completed,
-     *    and that all forward pass computations have been performed.
+     * Once allocation is complete for all nodes, this pass again traverses the
+     *  nodes, in creation order;
+     *  as each node is traversed, its <code>forward()</code> method is called.
+     *
+     * After this method has successfully completed,
+     *  it is guaranteed that all node allocation has been completed,
+     *  and that all forward pass computations have been performed.
      *
      * @param batchSize       XXX Marcin, could you provide a description of this param?
      */
@@ -102,17 +111,20 @@ class ExpressionGraph {
         v->allocate(batchSize);
       }
       for(auto&& v : *stack_)
-        v->forward();    
+        v->forward();
     }
 
     /**
-     * @brief Perform the backward pass of algorithmic differentiation (AD) on this graph.
+     * @brief Perform the backward pass of algorithmic differentiation (AD) on
+     *  this graph.
      *
-     * This pass traverses the nodes of this graph in reverse of the order they were created;
-     *    as each node is traversed, its <code>set_zero_adjoint()</code> method is called.
+     * This pass traverses the nodes of this graph in reverse of the order they
+     *  were created;
+     *  as each node is traversed, its <code>set_zero_adjoint()</code> method is called.
      *
-     * Once this has been performed for all nodes, this pass again traverses the nodes, again in reverse creation order;
-     *    as each node is traversed, its <code>backward()</code> method is called.
+     * Once this has been performed for all nodes, this pass again traverses
+     *  the nodes, again in reverse creation order;
+     *  as each node is traversed, its <code>backward()</code> method is called.
      *
      * After this method has successfully completed,
      *    and that all backward pass computations have been performed.
@@ -120,7 +132,7 @@ class ExpressionGraph {
     void backward() {
       for(auto&& v : *stack_)
         v->set_zero_adjoint();
-    
+
       typedef typename ChainableStack::reverse_iterator It;
       stack_->back()->init_dependent();
       for(It it = stack_->rbegin(); it != stack_->rend(); ++it)
@@ -128,9 +140,11 @@ class ExpressionGraph {
     }
 
     /**
-     * @brief Returns a string representing this expression graph in <code>graphviz</code> notation.
+     * @brief Returns a string representing this expression graph in
+     *  <code>graphviz</code> notation.
      *
-     * This string can be used by <code>graphviz</code> tools to visualize the expression graph.
+     * This string can be used by <code>graphviz</code> tools to visualize the
+     *  expression graph.
      *
      * @return a string representing this expression graph in <code>graphviz</code> notation
      */
@@ -145,14 +159,14 @@ class ExpressionGraph {
       ss << "}" << std::endl;
       return ss.str();
     }
-    
+
     /*********************************************************/
 
     /**
      * @brief Constructs a new node representing an input in an expression graph.
      *
      * This method records the input node in a list of input nodes,
-     *    but does not attach the new input node to any existing expression graph.
+     *  but does not attach the new input node to any existing expression graph.
      *
      * @param args           XXX Marcin, what are args here?
      *
@@ -169,7 +183,7 @@ class ExpressionGraph {
      * @brief Constructs a new node representing a parameter in an expression graph.
      *
      * This method records the parameter node in a list of parameter nodes,
-     *    but does not attach the new parameter node to any existing expression graph.
+     *  but does not attach the new parameter node to any existing expression graph.
      *
      * @param args           XXX Marcin, what are args here?
      *
@@ -183,9 +197,11 @@ class ExpressionGraph {
     }
 
     /**
-     * @brief Constructs a new node representing a constant in an expression graph.
+     * @brief Constructs a new node representing a constant in an expression
+     *  graph.
      *
-     * This method does not attach the new constant node to any existing expression graph.
+     * This method does not attach the new constant node to any existing
+     *  expression graph.
      *
      * @param args           XXX Marcin, what are args here?
      *
@@ -197,9 +213,11 @@ class ExpressionGraph {
     }
 
     /**
-     * @brief Constructs a new node representing a constant (with value 1) in an expression graph.
+     * @brief Constructs a new node representing a constant (with value 1) in
+     *  an expression graph.
      *
-     * This method does not attach the new constant node to any existing expression graph.
+     * This method does not attach the new constant node to any existing
+     *  expression graph.
      *
      * @param args           XXX Marcin, what are args here?
      *
@@ -211,9 +229,11 @@ class ExpressionGraph {
     }
 
     /**
-     * @brief Constructs a new node representing a constant (with value 0) in an expression graph.
+     * @brief Constructs a new node representing a constant (with value 0) in
+     * an expression graph.
      *
-     * This method does not attach the new constant node to any existing expression graph.
+     * This method does not attach the new constant node to any existing
+     * expression graph.
      *
      * @param args           XXX Marcin, what are args here?
      *
@@ -223,7 +243,7 @@ class ExpressionGraph {
     inline Expr zeroes(Args ...args) {
       return Expr(this, new ConstantNode(keywords::value=0, args...));
     }
-    
+
     /*********************************************************/
 
     /**
@@ -238,9 +258,11 @@ class ExpressionGraph {
     }
 
     /**
-     * @brief Returns the first item in the list with the specified name, if such an item exists.
+     * @brief Returns the first item in the list with the specified name, if
+     * such an item exists.
      *
-     * If no item with the specified name is found in the graph, this method throws an exception.
+     * If no item with the specified name is found in the graph, this method
+     * throws an exception.
      *
      * @param name Name of the desired expression node
      *
@@ -249,7 +271,7 @@ class ExpressionGraph {
     Expr& operator[](const std::string& name) {
       auto it = named_.find(name);
       UTIL_THROW_IF2(it == named_.end(), "No such named node in graph: " << name);
-      return it->second;  
+      return it->second;
     }
 
     /**
@@ -293,7 +315,7 @@ class ExpressionGraph {
     std::vector<Expr>& params() {
       return params_;
     }
-    
+
   private:
 
     /** @brief Pointer to the list of nodes */
@@ -307,6 +329,13 @@ class ExpressionGraph {
 
     /** @brief List of all input nodes of this expression graph. */
     std::vector<Expr> inputs_;
+
+    friend class boost::serialization::access;
+
+    template<class Archive>
+    void serialize(Archive & archive, const unsigned int version) {
+      // TODO
+    }
 };
 
-}
+} // namespace marian

@@ -1,10 +1,10 @@
 
 include_directories(.)
 
-cuda_add_library(marian_lib 
+cuda_add_library(marian_lib
   cnpy/cnpy.cpp
   exception.cpp
-  expression_graph.cu 
+  expression_graph.cu
   tensor.cu
   tensor_operators.cu
   expression_operators.cu
@@ -39,7 +39,14 @@ target_link_libraries(mnist_benchmark marian_lib)
 target_link_libraries(validate_mnist_batch marian_lib)
 target_link_libraries(validate_encoder_decoder marian_lib)
 
-foreach(exec marian mnist_benchmark validate_mnist_batch validate_encoder_decoder)
+cuda_add_executable(
+  test_serial
+  test_serial.cu
+)
+
+target_link_libraries(test_serial marian_lib)
+
+foreach(exec marian mnist_benchmark validate_mnist_batch validate_encoder_decoder test_serial)
   target_link_libraries(${exec} ${EXT_LIBS} cuda cudnn curand)
   cuda_add_cublas_to_target(${exec})
   set_target_properties(${exec} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
