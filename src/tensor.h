@@ -27,6 +27,9 @@
 #include <numeric>
 #include <sstream>
 
+#include <boost/serialization/vector.hpp>
+#include <boost/serialization/shared_ptr.hpp>
+
 #include "definitions.h"
 #include "exception.h"
 #include "thrust_functions.h"
@@ -75,8 +78,20 @@ class TensorImpl {
     size_t tno_; /*< Tensor number */
     static size_t tensorCounter; /*< Static counter of created Tensors */
 
+    friend class boost::serialization::access;
+
+    template<class Archive>
+    void serialize(Archive & archive, const unsigned int version) {
+      archive & shape_;
+      // TODO
+      //archive & data_;
+      archive & tno_;
+    }
+
   public:
     typedef Float value_type; /*< Tensor value type */
+
+    TensorImpl() { }
 
     /**
      * @brief Constructor
@@ -247,6 +262,13 @@ size_t TensorImpl<Type>::tensorCounter = 0;
 class Tensor {
   private:
     std::shared_ptr<TensorImpl<Float>> pimpl_; /*< Pointer to Tensor working on GPU */
+
+    friend class boost::serialization::access;
+
+    template<class Archive>
+    void serialize(Archive & archive, const unsigned int version) {
+      archive & pimpl_;
+    }
 
   public:
     typedef TensorImpl<Float>::value_type value_type; /*< Get value type of GPU's Tensor data */

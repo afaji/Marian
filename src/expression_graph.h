@@ -24,8 +24,8 @@
 #include <map>
 
 #include <boost/serialization/serialization.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
+#include <boost/serialization/vector.hpp>
+#include <boost/serialization/shared_ptr.hpp>
 
 #include "definitions.h"
 #include "chainable.h"
@@ -44,6 +44,8 @@ typedef ExpressionGraph* ExpressionGraphPtr;
 
 class Expr {
   public:
+    Expr() { }
+
     Expr(ExpressionGraphPtr g, Chainable<Tensor>* chainable);
 
     Expr operator=(Tensor t) {
@@ -64,6 +66,14 @@ class Expr {
   private:
     ExpressionGraphPtr graph_;
     ChainPtr pimpl_;
+
+    friend class boost::serialization::access;
+
+    template<class Archive>
+    void serialize(Archive & archive, const unsigned int version) {
+      archive & graph_;
+      //archive & pimpl_;
+    }
 };
 
 /**
@@ -334,6 +344,7 @@ class ExpressionGraph {
 
     template<class Archive>
     void serialize(Archive & archive, const unsigned int version) {
+      archive & params_;
       // TODO
     }
 };
