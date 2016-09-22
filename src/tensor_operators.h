@@ -34,11 +34,11 @@ class TensorView {
     float* data_;
     int rows_;
     int cols_;
-  
+
   public:
     TensorView(Tensor t)
     : data_(t.data()), rows_(t.shape()[0]), cols_(t.shape()[1]) {}
-    
+
     __device__ float& operator()(int i, int j) {
       if(rows_ != 1 && cols_ != 1)
         return data_[i * cols_ + j];
@@ -48,11 +48,11 @@ class TensorView {
         return data_[j];
       return data_[0];
     }
-    
+
     __device__ int rows() {
       return rows_;
     }
-    
+
     __device__ int cols() {
       return cols_;
     }
@@ -97,7 +97,7 @@ void Element(Functor functor,
 
   int m = out.shape()[0];
   int n = out.shape()[1];
-  
+
   int blocks  = std::min(MAX_BLOCKS, m);
   int threads = std::min(MAX_THREADS, n);
   gElement<<<blocks, threads>>>(functor, TensorView(out));
@@ -128,7 +128,7 @@ void Element(Functor functor,
 
   int m = out.shape()[0];
   int n = out.shape()[1];
-  
+
   int blocks  = std::min(MAX_BLOCKS, m);
   int threads = std::min(MAX_THREADS, n);
   gElement<<<blocks, threads>>>(functor, TensorView(out), TensorView(in));
@@ -158,7 +158,7 @@ void Element(Functor functor,
 
   int m = out.shape()[0];
   int n = out.shape()[1];
-  
+
   int blocks  = std::min(MAX_BLOCKS, m);
   int threads = std::min(MAX_THREADS, n);
   gElement<<<blocks, threads>>>(functor, TensorView(out),
@@ -189,7 +189,7 @@ void Element(Functor functor, Tensor out,
 
   int m = out.shape()[0];
   int n = out.shape()[1];
-  
+
   int blocks  = std::min(MAX_BLOCKS, m);
   int threads = std::min(MAX_THREADS, n);
   gElement<<<blocks, threads>>>(functor, TensorView(out),

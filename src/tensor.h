@@ -82,8 +82,8 @@ class TensorImpl {
 
     template<class Archive>
     void serialize(Archive & archive, const unsigned int version) {
-      archive & shape_;
       // TODO
+      archive & shape_;
       //archive & data_;
       archive & tno_;
     }

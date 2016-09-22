@@ -25,6 +25,8 @@
 #include "tensor.h"
 #include "chainable.h"
 
+#include <boost/serialization/string.hpp>
+
 namespace marian {
 
 class Node : public Chainable<Tensor>,
@@ -36,9 +38,9 @@ class Node : public Chainable<Tensor>,
        shape_(Get<Shape>(keywords::shape, {1, 1})),
        name_(Get<std::string>(keywords::name, "none"))
     { }
-    
+
     virtual ~Node() {};
-    
+
     virtual void allocate(size_t batchSize) {
       for(auto&& d : shape_) {
         if(d == whatevs)
@@ -56,7 +58,7 @@ class Node : public Chainable<Tensor>,
       else
         val_.allocate(shape_);
     }
-    
+
     virtual void init_dependent() {
       if(adj_) {
         adj_.set(1);
@@ -65,7 +67,7 @@ class Node : public Chainable<Tensor>,
         adj_.allocate(shape_, 1);
       }
     }
-    
+
     virtual void set_zero_adjoint() {
       if(adj_) {
         adj_.set(0);
@@ -74,27 +76,27 @@ class Node : public Chainable<Tensor>,
         adj_.allocate(shape_, 0);
       }
     }
-    
+
     virtual Tensor &val()  {
       UTIL_THROW_IF2(!val_, "Tensor has not been allocated");
       return val_;
     };
-    
+
     virtual Tensor grad() {
       UTIL_THROW_IF2(!adj_, "Tensor has not been allocated");
       return adj_;
     };
-    
+
     virtual const Shape& shape() {
-      return shape_;    
+      return shape_;
     }
 
     void set_name(const std::string& name) {
       name_ = name;
     }
-    
+
     const std::string &name() const { return name_; }
-    
+
     virtual const std::string label(const std::string& type) {
       std::stringstream label;
       label << "<" << type;
@@ -104,13 +106,27 @@ class Node : public Chainable<Tensor>,
       label << ">";
       return label.str();
     }
-    
+
   protected:
     Shape shape_;
     std::string name_;
-    
+
     Tensor val_;
     Tensor adj_;
+
+  private:
+    //friend class boost::serialization::access;
+
+    //template<class Archive>
+    //void serialize(Archive & archive, const unsigned int version) {
+        // TODO
+        //archive & boost::serialization::base_object<Chainable<Tensor>>(*this);
+        //archive & boost::serialization::base_object<keywords::Keywords>(*this);
+        //archive & shape_;
+        //archive & name_;
+        //archive & val_;
+        //archive adj_;
+    //}
 };
 
-}
+} // namespace marian

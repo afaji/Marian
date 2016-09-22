@@ -26,6 +26,7 @@
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/shared_ptr.hpp>
+#include <boost/serialization/map.hpp>
 
 #include "definitions.h"
 #include "chainable.h"
@@ -72,6 +73,7 @@ class Expr {
     template<class Archive>
     void serialize(Archive & archive, const unsigned int version) {
       archive & graph_;
+      // TODO
       //archive & pimpl_;
     }
 };
@@ -344,8 +346,11 @@ class ExpressionGraph {
 
     template<class Archive>
     void serialize(Archive & archive, const unsigned int version) {
-      archive & params_;
       // TODO
+      //archive & stack_;
+      archive & params_;
+      archive & named_;
+      //archive & intputs_;
     }
 };
 

@@ -50,7 +50,14 @@ struct Chainable {
     virtual void setVal(DataType t) {
       UTIL_THROW2("Tensors can only be assigned to input nodes");
     };
+
+    //friend class boost::serialization::access;
+
+    //template<class Archive>
+    //void serialize(Archive & archive, const unsigned int version) { }
 };
+
+//BOOST_SERIALIZATION_ASSUME_ABSTRACT(Chainable<Tensor>);
 
 // XXX Marcin, is ChainableStack the most appropriate name?
 //     AFAIK, this is never used as a FILO data structure.

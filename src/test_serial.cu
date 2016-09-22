@@ -18,6 +18,7 @@ void save(const std::string& fileName, const ExpressionGraph& graph) {
   std::ofstream ofs(fileName.c_str());
   boost::archive::text_oarchive oa(ofs);
   oa.template register_type< TensorImpl<float> >();
+  /*oa.template register_type< Chainable<Tensor> >();*/
   oa << graph;
 }
 
@@ -25,6 +26,7 @@ void load(const std::string& fileName, ExpressionGraph& graph) {
   std::ifstream ifs(fileName.c_str());
   boost::archive::text_iarchive ia(ifs);
   ia.template register_type< TensorImpl<float> >();
+  /*ia.template register_type< Chainable<Tensor> >();*/
   ia >> graph;
 }
 
