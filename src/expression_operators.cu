@@ -42,10 +42,6 @@ Expr relu(Expr a) {
   return Expr(a.graph(), new ReLUNodeOp(a));
 }
 
-Expr dropout(Expr a) {
-  return Expr(a.graph(), new DropoutNodeOp(a));
-}
-
 Expr log(Expr a) {
   return Expr(a.graph(), new LogNodeOp(a));
 };
@@ -60,6 +56,10 @@ Expr operator-(Expr a) {
 
 Expr softmax(Expr a) {
   return Expr(a.graph(), new SoftmaxNodeOp(a));
+}
+
+Expr logsoftmax(Expr a) {
+  return Expr(a.graph(), new LogSoftmaxNodeOp(a));
 }
 
 Expr argmax(Expr a) {

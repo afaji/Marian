@@ -88,6 +88,14 @@ class ExpressionGraph {
     /** @brief Constructs a new expression graph */
     ExpressionGraph() : stack_(new ChainableStack) {}
 
+    void inference(int batchSize) {
+      for(auto&& v : *stack_) {
+        v->allocate(batchSize);
+      }
+      for(auto&& v : *stack_)
+        v->inference();
+    }
+
     /**
      * @brief Performs backpropogation on this expression graph.
      *
@@ -149,6 +157,19 @@ class ExpressionGraph {
       stack_->back()->init_dependent();
       for(It it = stack_->rbegin(); it != stack_->rend(); ++it)
         (*it)->backward();
+    }
+
+    void backward_debug(Float delta) {
+      for(auto&& v : *stack_)
+        v->set_zero_adjoint();
+
+      typedef typename ChainableStack::reverse_iterator It;
+      stack_->back()->init_dependent();
+      for(It it = stack_->rbegin(); it != stack_->rend(); ++it) {
+        Chainable<Tensor> *chainable = *it;
+        //chainable->backward();
+        chainable->backward_debug(delta);
+      }
     }
 
     /**

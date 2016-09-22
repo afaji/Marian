@@ -26,19 +26,27 @@
 #include "mnist.h"
 #include "vocab.h"
 #include "tensor_operators.h"
+#include "curand.h"
 
 using namespace marian;
 using namespace keywords;
 
 int main(int argc, char** argv) {
-  ExpressionGraph g;
-
-  Tensor a({1000, 1000}, 3);
-  Tensor b({1, 1}, 2);
   
+  Tensor a({1000, 1000}, 3);
+  Tensor b({1000, 1000});
+  Bernoulli dropout(0.2, b.shape());
+  
+  auto f = [] __device__ (float& r,
+                          float a,
+                          float b)  {
+    return r = a * b;
+  };
+    
   boost::timer::cpu_timer timer;
   for(int i = 0; i < 1000; ++i)
-    Element(_1 += _1 * _2, a, b);
+    Element(f, b, a, a);
+  
   std::cerr << timer.format(5, "%ws") << std::endl;
   return 0;
 }

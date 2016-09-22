@@ -22,6 +22,8 @@
 // SOFTWARE.
 
 #include <cublas_v2.h>
+#include <cudnn.h>
+
 #include <thrust/device_vector.h>
 #include <thrust/functional.h>
 #include <numeric>
@@ -78,6 +80,9 @@ class TensorImpl {
     size_t tno_; /*< Tensor number */
     static size_t tensorCounter; /*< Static counter of created Tensors */
 
+    // cuDNN stuff
+    cudnnTensorDescriptor_t cudnnDesc_;
+
     friend class boost::serialization::access;
 
     template<class Archive>
@@ -110,10 +115,19 @@ class TensorImpl {
 
       int size = GetTotalSize(shape_);
       data_.resize(size, value);
+
+      cudnnCreateTensorDescriptor(&cudnnDesc_);
+      cudnnSetTensor4dDescriptorEx(cudnnDesc_, CUDNN_DATA_FLOAT,
+                                   shape_[0], shape_[1], 1, 1,
+                                   shape_[1], 1, 1, 1);
     }
 
     TensorImpl(const TensorImpl&) = delete;
     TensorImpl(TensorImpl&&) = delete;
+
+    ~TensorImpl() {
+        cudnnDestroyTensorDescriptor(cudnnDesc_);
+    }
 
     /**
      * @brief Get the i-th element of Tensor vector.
@@ -167,6 +181,7 @@ class TensorImpl {
      *
      * @return Shape of Tensor
      */
+    __host__ __device__
     const Shape& shape() const {
         return shape_;
     }
@@ -251,6 +266,11 @@ class TensorImpl {
       }
       return strm.str();
     }
+
+    cudnnTensorDescriptor_t cudnn() {
+      return cudnnDesc_;
+    }
+
 };
 
 template <typename Type>
@@ -279,6 +299,7 @@ class Tensor {
     Tensor() {}
 
     /**
+
      * @brief Constructor that allocates memory.
      *
      * @param shape Shape of Tensor.
@@ -383,6 +404,7 @@ class Tensor {
      *
      * @return Tensor's shape.
      */
+    __host__ __device__
     const Shape& shape() const {
       return pimpl_->shape();
     }
@@ -415,15 +437,6 @@ class Tensor {
     }
 
     /**
-     * @brief Run Debug on GPU Tensor.
-     *
-     * @return String of Tensor's data.
-     */
-    std::string Debug() const {
-      return pimpl_->Debug();
-    }
-
-    /**
      * @brief Print Tensor data on CPU (?) (const).
      */
     void Print() const {
@@ -431,6 +444,20 @@ class Tensor {
         std::cerr << (*this)[i] << " ";
       }
       std::cerr << std::endl;
+    }
+
+    /**
+     * @brief Run Debug on GPU Tensor.
+     *
+     * @return String of Tensor's data.
+     */
+    std::string Debug() const {
+      if (!pimpl_) {
+        return "Not yet set";
+      }
+      else {
+        return pimpl_->Debug();
+      }
     }
 
     //void Load(const std::string &path);
@@ -466,6 +493,43 @@ class Tensor {
     void get(std::vector<float> &vout) const {
       vout.resize(size());
       pimpl_->get(vout.begin());
+    }
+
+    class TensorView {
+      private:
+        float* data_;
+        int rows_;
+        int cols_;
+
+      public:
+        TensorView(Tensor t)
+          : data_(t.data()), rows_(t.shape()[0]), cols_(t.shape()[1]) {}
+
+        __device__ float& operator()(int i, int j) {
+          if(rows_ != 1 && cols_ != 1)
+            return data_[i * cols_ + j];
+          if(rows_ != 1 && cols_ == 1)
+            return data_[i];
+          if(rows_ == 1 && cols_ != 1)
+            return data_[j];
+          return data_[0];
+        }
+
+        __device__ int rows() {
+          return rows_;
+        }
+
+        __device__ int cols() {
+          return cols_;
+        }
+    };
+
+    TensorView gpu() {
+      return TensorView(*this);
+    }
+
+    cudnnTensorDescriptor_t cudnn() {
+      return pimpl_->cudnn();
     }
 };
 

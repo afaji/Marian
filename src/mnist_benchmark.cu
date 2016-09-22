@@ -6,7 +6,6 @@
 
 #include "marian.h"
 #include "mnist.h"
-#include "npz_converter.h"
 #include "optimizers.h"
 
 using namespace marian;
@@ -30,11 +29,10 @@ ExpressionGraph build_graph(const std::vector<int>& dims) {
     int out = dims[i+1];
       
     if(i == 0) {
-      layers.emplace_back(x);
+      layers.emplace_back(dropout(x, value=0.2));
     }
     else {
-      layers.emplace_back(reluplus(dot(layers.back(), weights.back()), biases.back()));
-      //layers.emplace_back(relu(dot(layers.back(), weights.back()) + biases.back()));
+      layers.emplace_back(dropout(relu(dot(layers.back(), weights.back()) + biases.back()), value=0.5));
     }
     
     weights.emplace_back(
@@ -47,7 +45,6 @@ ExpressionGraph build_graph(const std::vector<int>& dims) {
                       "scores");
   
   auto cost = mean(cross_entropy(scores, y), axis=0);
-  //auto cost = mean(-sum(y * log(softmax(scores)), axis=1), axis=0);
   auto costreg = named(
     cost, "cost"
   );
@@ -115,15 +112,18 @@ int main(int argc, char** argv) {
   std::vector<float> testLabels = datasets::mnist::ReadLabels("../examples/mnist/t10k-labels-idx1-ubyte", testRows, LABEL_SIZE);
   std::cerr << "Done." << std::endl;
 
-  ExpressionGraph g = build_graph({IMAGE_SIZE, 2048, 2048, 2048, 2048, 2048, LABEL_SIZE});
-  std::cout << g.graphviz() << std::endl;
+  ExpressionGraph g = build_graph({IMAGE_SIZE, 2048, 2048, LABEL_SIZE});
+  
+  std::ofstream viz("mnist_benchmark.dot");
+  viz << g.graphviz() << std::endl;
+  viz.close();
   
   Tensor xt({BATCH_SIZE, IMAGE_SIZE});
   Tensor yt({BATCH_SIZE, LABEL_SIZE});
   
   boost::timer::cpu_timer total;
   Adam opt(0.0002);
-  for(int i = 1; i <= 10; ++i) {
+  for(int i = 1; i <= 50; ++i) {
     boost::timer::cpu_timer timer;
     shuffle(trainImages, trainLabels, IMAGE_SIZE, LABEL_SIZE);
     float cost = 0;
@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
     g["x"] = xt;
     g["y"] = yt;
     
-    g.forward(BATCH_SIZE);
+    g.inference(BATCH_SIZE);
     
     std::vector<float> bResults;
     bResults << g["scores"].val();

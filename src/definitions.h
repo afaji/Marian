@@ -25,26 +25,70 @@
 #include <string>
 #include <functional>
 
+#include <boost/serialization/serialization.hpp>
+
+#define SHAPE_SIZE 2
+
 namespace marian {
-  typedef float Float;
-  typedef std::vector<int> Shape;
-  const int whatevs{-1};
-}
+
+typedef float Float;
+const int whatevs{-1};
+
+// POD for shape
+class Shape {
+  private:
+    int shape_[SHAPE_SIZE];
+
+  public:
+    Shape() : shape_{1, 1} { }
+
+    Shape(std::initializer_list<int> il) {
+     std::copy(il.begin(), il.end(), begin());
+    }
+
+    int& operator[](int i) {
+      return shape_[i];
+    }
+
+    const int& operator[](int i) const {
+      return shape_[i];
+    }
+
+    size_t size() const {
+      return SHAPE_SIZE;
+    }
+
+    int* begin() { return shape_; }
+    int* end() { return shape_ + SHAPE_SIZE; }
+
+    const int* begin() const { return shape_; }
+    const int* end() const { return shape_+ SHAPE_SIZE; }
+
+  private:
+    friend class boost::serialization::access;
+
+    template<class Archive>
+    void serialize(Archive & archive, const unsigned int version) {
+      archive & shape_;
+    }
+};
+
+} // namespace marian
 
 #include "keywords.h"
-// #include "tensor.h"
 
 namespace marian {
-  class Tensor;
 
-  namespace keywords {
-    KEY(axis, int)
-    KEY(name, std::string)
-    KEY(shape, Shape)
-    KEY(value, float)
-    KEY(lazy_shape, std::function<Shape()>)
-    KEY(lazy_value, std::function<float()>)
-    KEY(init, std::function<void(Tensor)>)
-  }
+class Tensor;
 
+namespace keywords {
+  KEY(axis, int)
+  KEY(name, std::string)
+  KEY(shape, Shape)
+  KEY(value, float)
+  KEY(lazy_shape, std::function<Shape()>)
+  KEY(lazy_value, std::function<float()>)
+  KEY(init, std::function<void(Tensor)>)
 }
+
+} // namespace marian

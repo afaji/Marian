@@ -33,7 +33,10 @@ Expr tanh(Expr a);
 
 Expr relu(Expr a);
 
-Expr dropout(Expr a);
+template <typename ...Args>
+Expr dropout(Expr a, Args ...args) {
+  return Expr(a.graph(), new DropoutNodeOp(a, args...));
+}
 
 Expr log(Expr a);
 
@@ -102,6 +105,8 @@ Expr softmax_slow(Expr a, Args ...args) {
 }
 
 Expr softmax(Expr a);
+
+Expr logsoftmax(Expr a);
 
 Expr argmax(Expr a);
 

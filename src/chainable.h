@@ -32,8 +32,11 @@ template <class DataType>
 struct Chainable {
     Chainable() { }
     virtual ~Chainable() { }
+    virtual void inference() { forward(); }
     virtual void forward() { }
     virtual void backward() { }
+    virtual void backward_debug(Float delta) { }
+
     virtual void check() { }
     virtual void init_dependent() { }
     virtual void set_zero_adjoint() { }
