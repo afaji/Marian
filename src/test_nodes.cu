@@ -27,10 +27,10 @@ int main(int argc, char** argv)
 
   // define graph
   auto g = New<ExpressionGraph>();
-  Expr inExpr = g->input(shape={batch_size, input_size});
-  Expr labelExpr = g->input(shape={batch_size, output_size});
+  InputLayer inExpr = g->input(shape={batch_size, input_size});
+  InputLayer labelExpr = g->input(shape={batch_size, output_size});
 
-  Expr inExpr2 = g->input(shape={batch_size, input_size});
+  InputLayer inExpr2 = g->input(shape={batch_size, input_size});
 
   vector<Expr> expr;
 

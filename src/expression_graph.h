@@ -26,7 +26,6 @@
 #include <fstream>
 
 #include "definitions.h"
-#include "chainable.h"
 #include "node_operators.h"
 #include "tensor.h"
 #include "batch_generator.h"
@@ -38,9 +37,22 @@ class ExpressionGraph;
 
 /** @brief A pointer to an expression graph. */
 typedef std::shared_ptr<ExpressionGraph> ExpressionGraphPtr;
-
+ 
 template <class T, typename ...Args>
 Expr Expression(Args&& ... args);
+// 
+// template <class T, typename ...Args>
+// InputLayer InputExpression(ExpressionGraphPtr graph, Args&& ... args);
+// 
+// template <class T, typename ...Args>
+// ConnectionWeights ParamExpression(ExpressionGraphPtr graph, Args&& ... args);
+
+
+
+
+
+
+
 
 /**
  * @brief Represents a computation graph of expressions, over which algorithmic differentiation may be performed.
@@ -222,12 +234,27 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      * @return a newly constructed input node
      */
     template <typename ...Args>
-    inline Expr input(Args ...args) {
-      auto e = Expression<InputNode>(shared_from_this(), args...);
+    inline InputLayer input(Args ...args) {
+      //auto e = InputExpression<InputNode>(shared_from_this(), args...);
+      //auto e = InputLayer(new InputNode(shared_from_this(), std::forward<Args>(args)...));
+      auto e = InputLayer(new InputNode(shared_from_this(), args...));
+      e->graph()->add(e);
       inputs_.emplace_back(e);
       return e;
     }
+// template <typename ...Args>
+// InputLayer InputExpression(ExpressionGraphPtr graph, Args&& ... args) {
+//   auto e = InputLayer(new InputNode(graph, std::forward<Args>(args)...));
+//   e->graph()->add(e);
+//   return e;
+// }
 
+// template <typename ...Args>
+// ConnectionWeights ParamExpression(ExpressionGraphPtr graph, Args&& ... args) {
+//   auto e = ConnectionWeights(new ParamNode(graph, std::forward<Args>(args)...));
+//   e->graph()->add(e);
+//   return e;
+// }
     /**
      * @brief Constructs a new node representing a parameter in an expression graph.
      *
@@ -239,8 +266,10 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      * @return a newly constructed parameter node
      */
     template <typename ...Args>
-    inline Expr param(Args ...args) {
-      auto e = Expression<ParamNode>(shared_from_this(), args...);
+    inline ConnectionWeights param(Args ...args) {
+      //auto e = ParamExpression<ParamNode>(shared_from_this(), args...);
+      auto e = ConnectionWeights(new ParamNode(shared_from_this(), args...));
+      e->graph()->add(e);
       params_.emplace_back(e);
       return e;
     }
@@ -256,7 +285,10 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      */
     template <typename ...Args>
     inline Expr constant(Args ...args) {
-      return Expression<ConstantNode>(shared_from_this(), args...);
+//      return Expression<ConstantNode>(shared_from_this(), args...);
+      auto e = Expr(new ConstantNode(shared_from_this(), std::forward<Args>(args)...));
+      e->graph()->add(e);
+      return e;
     }
 
     /**
@@ -270,7 +302,13 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      */
     template <typename ...Args>
     inline Expr ones(Args ...args) {
-      return Expression<ConstantNode>(shared_from_this(), keywords::value=1, args...);
+//      return Expression<ConstantNode>(shared_from_this(), keywords::value=1, args...);
+      auto e = Expr(new ConstantNode(
+                          shared_from_this(), 
+                          keywords::value=1, 
+                          std::forward<Args>(args)...));
+      e->graph()->add(e);
+      return e;
     }
 
     /**
@@ -284,7 +322,13 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      */
     template <typename ...Args>
     inline Expr zeroes(Args ...args) {
-      return Expression<ConstantNode>(shared_from_this(), keywords::value=0, args...);
+//      return Expression<ConstantNode>(shared_from_this(), keywords::value=0, args...);
+      auto e = Expr(new ConstantNode(
+                          shared_from_this(), 
+                          keywords::value=0, 
+                          std::forward<Args>(args)...));
+      e->graph()->add(e);
+      return e;
     }
 
     /*********************************************************/
@@ -309,7 +353,7 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      *
      * @return the list of all input nodes of this expression graph
      */
-    std::vector<Expr>& inputs() {
+    std::vector<InputLayer>& inputs() {
       return inputs_;
     }
 
@@ -318,7 +362,7 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
      *
      * @return the list of all parameter nodes of this expression graph
      */
-    std::vector<Expr>& params() {
+    std::vector<ConnectionWeights>& params() {
       return params_;
     }
 
@@ -373,10 +417,10 @@ class ExpressionGraph : public std::enable_shared_from_this<ExpressionGraph> {
     std::map<std::string, Expr> named_;
 
     /** @brief List of all parameter nodes of this expression graph. */
-    std::vector<Expr> params_;
+    std::vector<ConnectionWeights> params_;
 
     /** @brief List of all input nodes of this expression graph. */
-    std::vector<Expr> inputs_;
+    std::vector<InputLayer> inputs_;
 
     /** @brief Contains all nodes with regard to which we want to calculate derivatives */
     std::unordered_set<Expr> topNodes_;
@@ -388,6 +432,5 @@ Expr Expression(Args&& ... args) {
   e->graph()->add(e);
   return e;
 }
-
 
 }

@@ -41,69 +41,69 @@ Expr name(Expr a, const std::string& name) {
 }
 
 Expr logit(Expr a) {
-  return Expression<LogitNodeOp>(a);
+  return Expression<SigmoidNode>(a);
 }
 
 Expr tanh(Expr a) {
-  return Expression<TanhNodeOp>(a);
+  return Expression<TanhNode>(a);
 }
 
 Expr relu(Expr a) {
-  return Expression<ReLUNodeOp>(a);
+  return Expression<ReLUNode>(a);
 }
 
 Expr log(Expr a) {
-  return Expression<LogNodeOp>(a);
+  return Expression<LogNode>(a);
 };
 
 Expr exp(Expr a) {
-  return Expression<ExpNodeOp>(a);
+  return Expression<ExpNode>(a);
 };
 
 Expr operator-(Expr a) {
-  return Expression<NegNodeOp>(a);
+  return Expression<NegNode>(a);
 };
 
 Expr softmax(Expr a) {
-  return Expression<SoftmaxNodeOp>(a);
+  return Expression<SoftmaxNode>(a);
 }
 
 Expr logsoftmax(Expr a) {
-  return Expression<LogSoftmaxNodeOp>(a);
+  return Expression<LogSoftmaxNode>(a);
 }
 
 Expr argmax(Expr a) {
-  return Expression<ArgmaxNodeOp>(a);
+  return Expression<ArgmaxNode>(a);
 }
 
 /*********************************************************/
 
 Expr operator+(Expr a, Expr b) {
-  return Expression<PlusNodeOp>(a, b);
+  return Expression<PlusNode>(a, b);
 }
 
 Expr operator-(Expr a, Expr b) {
-  return Expression<MinusNodeOp>(a, b);
+  return Expression<MinusNode>(a, b);
 }
 
 Expr operator*(Expr a, Expr b) {
-  return Expression<MultNodeOp>(a, b);
+  return Expression<MultNode>(a, b);
 }
 
 Expr operator/(Expr a, Expr b) {
-  return Expression<DivNodeOp>(a, b);
+  return Expression<DivNode>(a, b);
 }
 
 Expr dot(Expr a, Expr b) {
-  return Expression<DotNodeOp>(a, b);
+  return Expression<DotNode>(a, b);
 }
 
 Expr reluplus(Expr a, Expr b) {
-  return Expression<ReLUPlusNodeOp>(a, b);
+  return Expression<ReLUPlusNode>(a, b);
 }
 
 Expr cross_entropy(Expr a, Expr b) {
-  return Expression<CrossEntropyNodeOp>(a, b);
+  return Expression<CrossEntropyNode>(a, b);
 }
 
 }

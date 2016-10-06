@@ -5,12 +5,12 @@
 
 namespace marian {
 
-struct UnaryNodeOp : public Node {
+struct UnaryNode : public DifferentiableNode {
     Expr a_;
 
     template <typename ...Args>
-    UnaryNodeOp(Expr a, Args ...args)
-    : Node(a->graph(),
+    UnaryNode(Expr a, Args ...args)
+    : DifferentiableNode(a->graph(),
            keywords::shape=a->shape(), //@TODO: Check keywords?
            keywords::no_inference=a->skipped_inference() || keywords::Get(keywords::no_inference, false, args...),
            keywords::no_training=a->skipped_training() || keywords::Get(keywords::no_training, false, args...),
@@ -20,14 +20,14 @@ struct UnaryNodeOp : public Node {
         remove_children_from_top_nodes();
     }
 
-    ~UnaryNodeOp() {}
+    ~UnaryNode() {}
 
     void remove_children_from_top_nodes();
 
     void backward_debug(Float delta) {
       using namespace std;
 
-      cerr << "UnaryNodeOp::" << typeid(*this).name() << "::backward_numeric()" << endl;
+      cerr << "UnaryNode::" << typeid(*this).name() << "::backward_numeric()" << endl;
 
 	  std::vector<float> preCalcGradA, diffGradA, numericalGradA;
 	  preCalcGradA << a_->grad();
@@ -53,10 +53,10 @@ struct UnaryNodeOp : public Node {
 
 };
 
-struct LogitNodeOp : public UnaryNodeOp {
+struct SigmoidNode : public UnaryNode {
   template <typename ...Args>
-  LogitNodeOp(Args ...args)
-  : UnaryNodeOp(args...) {  }
+  SigmoidNode(Args ...args)
+  : UnaryNode(args...) {  }
 
   void forward() {
     Element(_1 = Sigma(_2),
@@ -82,10 +82,10 @@ struct LogitNodeOp : public UnaryNodeOp {
 
 };
 
-struct TanhNodeOp : public UnaryNodeOp {
+struct TanhNode : public UnaryNode {
   template <typename ...Args>
-  TanhNodeOp(Args ...args)
-  : UnaryNodeOp(args...) { }
+  TanhNode(Args ...args)
+  : UnaryNode(args...) { }
 
   void forward() {
     Element(_1 = Tanh(_2),
@@ -122,10 +122,10 @@ struct TanhNodeOp : public UnaryNodeOp {
   \end{cases}
 \f]
  */
-struct ReLUNodeOp : public UnaryNodeOp {
+struct ReLUNode : public UnaryNode {
   template <typename ...Args>
-  ReLUNodeOp(Args ...args)
-  : UnaryNodeOp(args...) { }
+  ReLUNode(Args ...args)
+  : UnaryNode(args...) { }
 
   void forward() {
     Element(_1 = ReLU(_2),
@@ -154,13 +154,13 @@ struct ReLUNodeOp : public UnaryNodeOp {
  * @see \cite dropout
  * @see \cite cudnn
  */
-struct DropoutNodeOp : public UnaryNodeOp {
+struct DropoutNode : public UnaryNode {
   template <typename ...Args>
-  DropoutNodeOp(Args ...args)
-  : UnaryNodeOp(args...),
+  DropoutNode(Args ...args)
+  : UnaryNode(args...),
     allocated_(false), p_(Get(keywords::value, 0.5)) {}
 
-  ~DropoutNodeOp() {
+  ~DropoutNode() {
     if(allocated_)
       CudnnDropoutDestroy(dropDesc_, space_, states_);
  }
@@ -204,10 +204,10 @@ struct DropoutNodeOp : public UnaryNodeOp {
     cudnnDropoutDescriptor_t dropDesc_;
 };
 
-struct SoftmaxNodeOp : public UnaryNodeOp {
+struct SoftmaxNode : public UnaryNode {
   template <typename ...Args>
-    SoftmaxNodeOp(Args ...args)
-    : UnaryNodeOp(args...) { }
+    SoftmaxNode(Args ...args)
+    : UnaryNode(args...) { }
 
   void forward() {
     CudnnSoftmax(val_, a_->val());
@@ -236,10 +236,10 @@ struct SoftmaxNodeOp : public UnaryNodeOp {
   };
 };
 
-struct LogSoftmaxNodeOp : public UnaryNodeOp {
+struct LogSoftmaxNode : public UnaryNode {
   template <typename ...Args>
-    LogSoftmaxNodeOp(Args ...args)
-    : UnaryNodeOp(args...) { }
+    LogSoftmaxNode(Args ...args)
+    : UnaryNode(args...) { }
 
   void forward() {
     CudnnLogSoftmax(val_, a_->val());
@@ -262,10 +262,10 @@ struct LogSoftmaxNodeOp : public UnaryNodeOp {
 };
 
 
-struct ArgmaxNodeOp : public UnaryNodeOp {
+struct ArgmaxNode : public UnaryNode {
   template <typename ...Args>
-  ArgmaxNodeOp(Expr a, Args ...args)
-    : UnaryNodeOp(a, keywords::shape=newShape(a), args...) { }
+  ArgmaxNode(Expr a, Args ...args)
+    : UnaryNode(a, keywords::shape=newShape(a), args...) { }
 
   void forward() {
     // B = softmax(A).
@@ -292,10 +292,10 @@ struct ArgmaxNodeOp : public UnaryNodeOp {
 
 };
 
-struct LogNodeOp : public UnaryNodeOp {
+struct LogNode : public UnaryNode {
   template <typename ...Args>
-  LogNodeOp(Args ...args)
-  : UnaryNodeOp(args...) {}
+  LogNode(Args ...args)
+  : UnaryNode(args...) {}
 
   void forward() {
     Element(_1 = Log(_2), val_, a_->val());
@@ -316,10 +316,10 @@ struct LogNodeOp : public UnaryNodeOp {
 
 };
 
-struct ExpNodeOp : public UnaryNodeOp {
+struct ExpNode : public UnaryNode {
   template <typename ...Args>
-    ExpNodeOp(Args ...args)
-    : UnaryNodeOp(args...) { }
+    ExpNode(Args ...args)
+    : UnaryNode(args...) { }
 
   void forward() {
     Element(_1 = Exp(_2), val_, a_->val());
@@ -340,10 +340,10 @@ struct ExpNodeOp : public UnaryNodeOp {
 
 };
 
-struct NegNodeOp : public UnaryNodeOp {
+struct NegNode : public UnaryNode {
   template <typename ...Args>
-  NegNodeOp(Args ...args)
-  : UnaryNodeOp(args...) { }
+  NegNode(Args ...args)
+  : UnaryNode(args...) { }
 
   void forward() {
     Element(_1 = -_2, val_, a_->val());

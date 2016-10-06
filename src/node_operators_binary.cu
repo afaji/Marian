@@ -2,7 +2,7 @@
 #include "expression_graph.h"
 
 namespace marian {
-  void BinaryNodeOp::remove_children_from_top_nodes() {
+  void BinaryNode::remove_children_from_top_nodes() {
     graph_->remove_top_node(a_);
     graph_->remove_top_node(b_);
   }

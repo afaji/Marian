@@ -28,10 +28,10 @@
 
 namespace marian {
 
-struct InputNode : public Node {
+struct InputNode : public DifferentiableNode {
   template <typename ...Args>
-  InputNode(Args ...args)
-  : Node(args...) {
+  InputNode(ExpressionGraphPtr graph, Args ...args)
+  : DifferentiableNode(graph, args...) {
     UTIL_THROW_IF2(!Has(keywords::shape) &&
                    !Has(keywords::lazy_shape),
                    "Data items require shape information");
@@ -56,10 +56,11 @@ struct InputNode : public Node {
 
 };
 
-struct ConstantNode : public Node {
+
+struct ConstantNode : public DifferentiableNode {
   template <typename ...Args>
-  ConstantNode(Args ...args)
-  : Node(args...) {
+  ConstantNode(ExpressionGraphPtr graph, Args ...args)
+  : DifferentiableNode(graph, args...) {
     UTIL_THROW_IF2(!Has(keywords::shape) &&
                    !Has(keywords::lazy_shape),
                    "Constant items require shape information");
@@ -78,10 +79,10 @@ struct ConstantNode : public Node {
 
 };
 
-struct ParamNode : public Node {
+struct ParamNode : public DifferentiableNode {
   template <typename ...Args>
-  ParamNode(Args ...args)
-  : Node(args...),
+  ParamNode(ExpressionGraphPtr graph, Args ...args)
+  : DifferentiableNode(graph, args...),
     init_(Get(keywords::init, [](Tensor){ })),
     initialized_(false)
   {
@@ -128,5 +129,13 @@ struct ParamNode : public Node {
     std::function<void(Tensor)> init_;
     bool initialized_;
 };
+
+
+/** @brief Defines a convenience type to represent a shared pointer to a DifferentiableNode object. */
+typedef std::shared_ptr<InputNode> InputLayer;
+
+/** @brief Defines a convenience type to represent a shared pointer to a DifferentiableNode object. */
+typedef std::shared_ptr<ParamNode> ConnectionWeights;
+
 
 }

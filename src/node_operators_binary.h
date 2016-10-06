@@ -5,13 +5,13 @@
 
 namespace marian {
 
-struct BinaryNodeOp : public Node {
+struct BinaryNode : public DifferentiableNode {
   Expr a_;
   Expr b_;
 
   template <typename ...Args>
-  BinaryNodeOp(Expr a, Expr b, Args ...args)
-   : Node(a->graph(),
+  BinaryNode(Expr a, Expr b, Args ...args)
+   : DifferentiableNode(a->graph(),
 		  keywords::shape=keywords::Get(keywords::shape, a->shape(), args...),
 		  keywords::no_inference=a->skipped_inference()
 			|| b->skipped_inference()
@@ -24,14 +24,14 @@ struct BinaryNodeOp : public Node {
 	remove_children_from_top_nodes();
   }
 
-  ~BinaryNodeOp() {}
+  ~BinaryNode() {}
 
   void remove_children_from_top_nodes();
 
   void backward_debug(Float delta) {
 	  using namespace std;
 
-	  cerr << "BinaryNodeOp::" << typeid(*this).name() << "::backward_debug()" << endl;
+	  cerr << "BinaryNode::" << typeid(*this).name() << "::backward_debug()" << endl;
 
 	  std::vector<float> preCalcGradA, diffGradA, numericalGradA;
 	  preCalcGradA << a_->grad();
@@ -86,10 +86,10 @@ struct BinaryNodeOp : public Node {
  *        <a href="https://en.wikipedia.org/wiki/Matrix_multiplication#Matrix_product_.28two_matrices.29">matrix
  *        multiplication</a> of two input matrices.
  */
-struct DotNodeOp : public BinaryNodeOp {
+struct DotNode : public BinaryNode {
   template <typename ...Args>
-  DotNodeOp(Expr a, Expr b, Args ...args)
-  : BinaryNodeOp(a, b,
+  DotNode(Expr a, Expr b, Args ...args)
+  : BinaryNode(a, b,
                  keywords::shape=newShape(a, b),
                  args...) { }
 
@@ -128,10 +128,10 @@ struct DotNodeOp : public BinaryNodeOp {
 
 };
 
-struct PlusNodeOp : public BinaryNodeOp {
+struct PlusNode : public BinaryNode {
   template <typename ...Args>
-  PlusNodeOp(Args ...args)
-    : BinaryNodeOp(args...) { }
+  PlusNode(Args ...args)
+    : BinaryNode(args...) { }
 
   void forward() {
     Element(_1 = _2 + _3,
@@ -156,10 +156,10 @@ struct PlusNodeOp : public BinaryNodeOp {
 
 };
 
-struct ReLUPlusNodeOp : public BinaryNodeOp {
+struct ReLUPlusNode : public BinaryNode {
   template <typename ...Args>
-  ReLUPlusNodeOp(Args ...args)
-    : BinaryNodeOp(args...) { }
+  ReLUPlusNode(Args ...args)
+    : BinaryNode(args...) { }
 
   void forward() {
     Element(_1 = ReLU(_2 + _3),
@@ -184,10 +184,10 @@ struct ReLUPlusNodeOp : public BinaryNodeOp {
 
 };
 
-struct MinusNodeOp : public BinaryNodeOp {
+struct MinusNode : public BinaryNode {
   template <typename ...Args>
-  MinusNodeOp(Args ...args)
-    : BinaryNodeOp(args...) { }
+  MinusNode(Args ...args)
+    : BinaryNode(args...) { }
 
   void forward() {
     Element(_1 = _2 - _3,
@@ -212,10 +212,10 @@ struct MinusNodeOp : public BinaryNodeOp {
 
 };
 
-struct MultNodeOp : public BinaryNodeOp {
+struct MultNode : public BinaryNode {
   template <typename ...Args>
-  MultNodeOp(Args ...args)
-    : BinaryNodeOp(args...) { }
+  MultNode(Args ...args)
+    : BinaryNode(args...) { }
 
   void forward() {
     Element(_1 = _2 * _3,
@@ -240,10 +240,10 @@ struct MultNodeOp : public BinaryNodeOp {
 
 };
 
-struct DivNodeOp : public BinaryNodeOp {
+struct DivNode : public BinaryNode {
   template <typename ...Args>
-  DivNodeOp(Args ...args)
-    : BinaryNodeOp(args...) { }
+  DivNode(Args ...args)
+    : BinaryNode(args...) { }
 
   void forward() {
     Element(_1 = _2 / _3,
@@ -269,10 +269,10 @@ struct DivNodeOp : public BinaryNodeOp {
 };
 
 // Cross-entropy node. It computes -b*log(softmax(a)), summing rowwise.
-struct CrossEntropyNodeOp : public BinaryNodeOp {
+struct CrossEntropyNode : public BinaryNode {
   template <typename ...Args>
-    CrossEntropyNodeOp(Expr a, Expr b, Args ...args)
-    : BinaryNodeOp(a, b,
+    CrossEntropyNode(Expr a, Expr b, Args ...args)
+    : BinaryNode(a, b,
                    keywords::shape=newShape(a, b),
                    args...) { }
 

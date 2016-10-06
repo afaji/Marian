@@ -25,33 +25,100 @@
 
 #include "keywords.h"
 #include "tensor.h"
-#include "chainable.h"
 
 namespace marian {
 
 class ExpressionGraph;
 typedef std::shared_ptr<ExpressionGraph> ExpressionGraphPtr;
 
-class Node : public Chainable<Tensor>,
-             public keywords::Keywords,
-             public std::enable_shared_from_this<Node> {
+
+class ExpressionGraphNode : public keywords::Keywords {
+
   public:
-    template <typename ...Args>
-    Node(ExpressionGraphPtr graph, Args ...args)
-     : Keywords(args...),
-       graph_(graph),
-       shape_(Get(keywords::shape, {1, 1})),
-       givenShape_(shape_),
-       name_("none"),
-       skipInference_(Get(keywords::no_inference, false)),
-       skipTraining_(Get(keywords::no_training, false))
-    {}
 
-    virtual ~Node() {}
+	template <typename ...Args>
+	ExpressionGraphNode(ExpressionGraphPtr graph, Args ...args)
+	 : Keywords(args...),
+	   graph_(graph),
+	   shape_(Get(keywords::shape, {1, 1})),
+	   givenShape_(shape_),
+	   name_("none")
+	{}
 
-    virtual ExpressionGraphPtr graph() {
-      return graph_;
-    }
+	virtual ~ExpressionGraphNode() {}
+   
+    virtual ExpressionGraphPtr graph();   
+   
+    virtual void inference() = 0;
+        
+    virtual std::string graphviz() = 0;
+
+    virtual void allocate(size_t batchSize);
+    
+    void set_name(const std::string& name);
+
+    const std::string &name() const;
+    
+    virtual const std::string label(const std::string& type);
+
+
+    
+    virtual const Shape& shape();
+
+    virtual Tensor val();
+
+    
+  protected:
+  
+    ExpressionGraphPtr graph_;
+    Shape shape_;
+    const Shape givenShape_;
+    std::string name_;
+    Tensor val_;
+
+};
+
+class DifferentiableNode : public ExpressionGraphNode,
+                           public std::enable_shared_from_this<DifferentiableNode> {
+
+  public:
+
+	template <typename ...Args>
+	DifferentiableNode(ExpressionGraphPtr graph, Args ...args)
+	 : ExpressionGraphNode(graph, args...)
+	{}
+
+	virtual ~DifferentiableNode() {}
+    
+    /**
+     * @brief In the context of
+     *    <a href="https://justindomke.wordpress.com/2009/03/24/a-simple-explanation-of-reverse-mode-automatic-differentiation/">reverse mode</a>
+     *    <a href="https://en.wikipedia.org/wiki/Automatic_differentiation">algorithmic differentiation</a> over an expression graph,
+     *    performs forward calculation
+     *    for the expression subgraph rooted at this element (aka chainable element \f$i\f$).
+     *
+     * If this object represents the result of the <em>i</em>-th function in an expression graph,
+     * then formally, this method calculates \f$w_i\f$.
+     */
+    virtual void forward() { }
+
+    /**
+     * @brief In the context of
+     *    <a href="https://justindomke.wordpress.com/2009/03/24/a-simple-explanation-of-reverse-mode-automatic-differentiation/">reverse mode</a>
+     *    <a href="https://en.wikipedia.org/wiki/Automatic_differentiation">algorithmic differentiation</a> over an expression graph,
+     *    performs <a href="https://en.wikipedia.org/wiki/Automatic_differentiation#Reverse_accumulation">reverse accumulation</a>
+     *    for the expression subgraph rooted at this element (aka chainable element \f$i\f$).
+     *
+     * If this object represents the result of the <em>i</em>-th function in an expression graph,
+     * then formally, this method calculates \f$\bar{w}_i = \frac{\partial y}{\partial w_i}\f$.
+     */
+    virtual void backward() { }
+    virtual void backward_debug(Float delta) { }
+
+	
+	virtual void inference() { 
+		forward();
+	}
 
     virtual void skip_inference() { skipInference_ = true; }
     virtual bool skipped_inference() { return skipInference_; }
@@ -59,28 +126,13 @@ class Node : public Chainable<Tensor>,
     virtual void skip_training();
 
     virtual bool skipped_training() { return skipTraining_; }
+    
+	virtual void check() { }
 
-    virtual void allocate(size_t batchSize) {
-      auto it1 = shape_.begin();
-      auto it2 = givenShape_.begin();
-      while(it1 != shape_.end()) {
-        if(*it2 == whatevs)
-          *it1 = batchSize;
-        it1++; it2++;
-      }
 
-      if(Has(keywords::lazy_shape)) {
-        auto defaultShape = [this]() -> Shape { return shape_; };
-        shape_ = Get(keywords::lazy_shape, defaultShape)();
-      }
-      if(Has(keywords::lazy_value))
-        val_.allocate(shape_, Get(
-          keywords::lazy_value, []()->Float{return 0.f;})());
-      else if(Has(keywords::value))
-        val_.allocate(shape_, Get(keywords::value, 0));
-      else
-        val_.allocate(shape_);
-    }
+    virtual Tensor grad() {
+      return adj_;
+    };
 
     virtual void init_dependent() {
       if(adj_) {
@@ -99,57 +151,13 @@ class Node : public Chainable<Tensor>,
         adj_.allocate(shape_, 0);
       }
     }
-
-    virtual Tensor val()  {
-      return val_;
-    };
-
-    virtual Tensor grad() {
-      //UTIL_THROW_IF2(!adj_, "Tensor has not been allocated");
-      return adj_;
-    };
-
-    virtual const Shape& shape() {
-      return shape_;
-    }
-
-    void set_name(const std::string& name) {
-      name_ = name;
-    }
-
-    const std::string &name() const { return name_; }
-
-    virtual const std::string label(const std::string& type) {
-      std::stringstream label;
-      label << "<" << type;
-      if(name_ != "none") {
-        label << "<br/>" << "\"" << name_ << "\"";
-      }
-      label << ">";
-      return label.str();
-    }
-
+    
   protected:
-    ExpressionGraphPtr graph_;
-    Shape shape_;
-    const Shape givenShape_;
-    std::string name_;
 
-    Tensor val_;
     Tensor adj_;
-
-    bool skipInference_;
+    
+	bool skipInference_;
     bool skipTraining_;
-
-    template<class ITER>
-    void output(const std::string &title, const ITER &b, const ITER &e) const
-    {
-        std::cerr << title << ": ";
-        for (ITER iter = b; iter != e; ++iter) {
-          std::cerr << *iter << " ";
-        }
-        std::cerr << std::endl;
-    }
 
     void calc_numeric_grad(
               Float delta,
@@ -157,11 +165,22 @@ class Node : public Chainable<Tensor>,
               Tensor grad
               );
 
-    void broadcast(const std::vector<float> &largeVec, std::vector<float> &smallVec);
-
     void outputL2Norm(const std::string &str, const std::vector<float> &x, const std::vector<float> &y) const;
     float L2Norm(const std::vector<float> &vec) const;
 
 };
+
+/** @brief Defines a convenience type to represent a shared pointer to a DifferentiableNode object. */
+typedef std::shared_ptr<DifferentiableNode> Expr;
+
+/**
+ * @brief Defines a convenience type to represent an ordered collection items.
+ *
+ * Conceptually, the items in this collection are pointers to nodes in an expression graph.
+ *
+ * Naumann (2012) uses "tape" to refer to this data structure.
+ * -- The Art of Differentiating Computer Programs: An Introduction to Algorithmic Differentiation, Naumann (2012)
+ */
+typedef std::vector<Expr> Tape;
 
 }

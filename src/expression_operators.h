@@ -43,7 +43,7 @@ Expr logit(Expr a);
 Expr tanh(Expr a);
 
 /**
- * Constructs a ReLUNodeOp object from the provided Expr object,
+ * Constructs a ReLUNode object from the provided Expr object,
  *     wraps the <a href="https://en.wikipedia.org/wiki/Rectifier_(neural_networks)">rectified linear</a> node in a shared pointer, 
  *     adds it to the associated ExpressionGraph,
  *     and returns the shared pointer to the rectified linear node
@@ -55,7 +55,7 @@ Expr tanh(Expr a);
 Expr relu(Expr a);
 
 /**
- * Constructs a DropoutNodeOp object from the provided Expr object,
+ * Constructs a DropoutNode object from the provided Expr object,
  *     wraps the <a href="https://en.wikipedia.org/wiki/Dropout_(neural_networks)">dropout</a> node in a shared pointer, 
  *     adds it to the associated ExpressionGraph,
  *     and returns the shared pointer to the dropout node
@@ -66,7 +66,7 @@ Expr relu(Expr a);
  */
 template <typename ...Args>
 Expr dropout(Expr a, Args ...args) {
-  return Expression<DropoutNodeOp>(a, args...);
+  return Expression<DropoutNode>(a, args...);
 }
 
 Expr log(Expr a);
