@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
      "Maximum number of batch updates, 0 is infinity")
     ("disp-freq", po::value(&dispFreq)->default_value(100),
      "Display information every  arg  updates")
-    ("save-freq", po::value(&saveFreq)->default_value(10000),
+    ("save-freq", po::value(&saveFreq)->default_value(5000),
      "Save model file every  arg  updates")
     ("work-space", po::value(&workSpace)->default_value(4096),
      "Preallocate  arg  MB of work space")

@@ -4,12 +4,92 @@
 #include <memory>
 #include <boost/any.hpp>
 #include "tensor_operators.h"
+#include <thrust/sort.h>
+#include <thrust/device_ptr.h>
 
 namespace marian {
 
 // @TODO: modify computation graph to group all paramters in single matrix object.
 // This will allow to perform a single large SGD update per batch. Currently there
 // are as many updates as different parameters.
+
+
+//data is a pointer to gradient, already stored in GPU.
+static bool has_init;
+static float *temp_d;
+static float *d_error;
+
+
+__global__ void grad_drop(float* data, float* errors, float* threshold_ptr, int max_size){
+  int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  float cut_off = threshold_ptr[0];
+  if (idx >= max_size)
+    return;
+  if (abs(data[idx]) <= cut_off){
+    data[idx] = 0.0;
+    errors[idx] = data[idx];
+  }else{
+    errors[idx] = 0.0;
+  }
+}
+
+__global__ void grad_add_error(float* data, float* errors, int max_size){
+  int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  if (idx >= max_size)
+    return;
+  data[idx] += errors[idx];
+}
+
+
+
+struct t_abs
+{
+  __host__ __device__
+  void operator()(float &x)
+  {
+    x = abs(x);
+  }
+};
+
+
+void grad_drop_do(float* data, float* errors, float* tmp_data, int len, float rate){
+  int threads = 512;
+  int blocks = 1 + len/threads;
+  grad_add_error<<<blocks, threads>>>(data, errors, len);
+  thrust::device_ptr<float> dev_data_ptr(tmp_data);
+  thrust::for_each(dev_data_ptr, dev_data_ptr + len, t_abs());
+  thrust::sort(dev_data_ptr, dev_data_ptr + len); // OVERKILL. Too slow and need extra memory. Need to replace with faster k-th selection. (inplace Radix Select?)
+  int cut_index = len * rate;
+  if (cut_index >= len)
+    cut_index = len -1;
+
+  grad_drop<<<blocks, threads>>>(data, errors, tmp_data + cut_index, len);
+
+}
+
+void grad_drop(ExpressionGraphPtr graph, float rate){
+    int f_len = graph->params().grads()->size();
+
+    if (!has_init){
+      has_init = true;
+      int extra = (2 * f_len * sizeof(float)) / (1024 * 1024);
+      std::cerr<<"reserving extra "<<extra<<" MB"<<std::endl;
+      cudaMalloc(&temp_d, f_len * sizeof(float));
+      cudaMalloc(&d_error, f_len * sizeof(float));
+    }
+    
+
+    cudaMemcpy(temp_d,graph->params().grads()->data(), f_len, cudaMemcpyDeviceToDevice);
+    int pos = 0;
+    for(auto& param : graph->params()){
+      //std::cerr<<param->grad()->shape()[0]<<" x "<<param->grad()->shape()[1]<<std::endl;
+      int len = param->grad()->size();
+      grad_drop_do(param->grad()->data(), d_error, temp_d + pos, len, rate);
+      pos += len;
+
+    }
+}
+
 
 class OptimizerBase {
   public:
@@ -102,6 +182,7 @@ class Adam : public OptimizerBase {
       Tensor pg = graph->params().grads();
 
       //clip(pg);
+      grad_drop(graph, 0.99);
 
       Element(_1 = (beta1_ * _1) + ((1 - beta1_) * _2),
               mt_, pg);
