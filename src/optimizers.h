@@ -6,6 +6,7 @@
 #include "tensor_operators.h"
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
+#include <thrust/count.h>
 
 namespace marian {
 
@@ -26,10 +27,10 @@ __global__ void grad_drop(float* data, float* errors, float* threshold_ptr, int 
   if (idx >= max_size)
     return;
   if (abs(data[idx]) <= cut_off){
-    data[idx] = 0.0;
     errors[idx] = data[idx];
+    data[idx] = 0;
   }else{
-    errors[idx] = 0.0;
+    errors[idx] = 0;
   }
 }
 
@@ -52,6 +53,8 @@ struct t_abs
 };
 
 
+static int wow = 10;
+
 void grad_drop_do(float* data, float* errors, float* tmp_data, int len, float rate){
   int threads = 512;
   int blocks = 1 + len/threads;
@@ -67,6 +70,7 @@ void grad_drop_do(float* data, float* errors, float* tmp_data, int len, float ra
 
 }
 
+
 void grad_drop(ExpressionGraphPtr graph, float rate){
     int f_len = graph->params().grads()->size();
 
@@ -74,19 +78,18 @@ void grad_drop(ExpressionGraphPtr graph, float rate){
       has_init = true;
       int extra = (2 * f_len * sizeof(float)) / (1024 * 1024);
       std::cerr<<"reserving extra "<<extra<<" MB"<<std::endl;
-      cudaMalloc(&temp_d, f_len * sizeof(float));
-      cudaMalloc(&d_error, f_len * sizeof(float));
+      cudaMalloc((void **)&temp_d, f_len * sizeof(float));
+      cudaMalloc((void **)&d_error, f_len * sizeof(float));
     }
     
 
-    cudaMemcpy(temp_d,graph->params().grads()->data(), f_len, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(temp_d,graph->params().grads()->data(), f_len * sizeof(float), cudaMemcpyDeviceToDevice);
     int pos = 0;
     for(auto& param : graph->params()){
       //std::cerr<<param->grad()->shape()[0]<<" x "<<param->grad()->shape()[1]<<std::endl;
       int len = param->grad()->size();
-      grad_drop_do(param->grad()->data(), d_error, temp_d + pos, len, rate);
+      grad_drop_do(param->grad()->data(), d_error + pos, temp_d + pos, len, rate);
       pos += len;
-
     }
 }
 
@@ -178,11 +181,12 @@ class Adam : public OptimizerBase {
       float denom1 = 1 - pow(beta1_, t_);
       float denom2 = 1 - pow(beta2_, t_);
 
+      grad_drop(graph, 0.99);
+
       Tensor pv = graph->params().vals();
       Tensor pg = graph->params().grads();
 
       //clip(pg);
-      grad_drop(graph, 0.99);
 
       Element(_1 = (beta1_ * _1) + ((1 - beta1_) * _2),
               mt_, pg);
