@@ -49,10 +49,10 @@ __global__ void full_abs(float* data, int max_size){
 }
 
 
-static int wow = 10;
+static int wow = 0;
 static float gray[5000000];
 void grad_drop_do(float* data, float* errors, int len, float rate){
-  int threads = 256;
+  int threads = 512;
   int blocks = 1 + len/threads;
   grad_add_error<<<blocks, threads>>>(data, errors, len);
 
@@ -68,6 +68,18 @@ void grad_drop_do(float* data, float* errors, int len, float rate){
   cudaMemcpy(&cut_off, temp_d + cut_index, sizeof(float), cudaMemcpyDeviceToHost);
   
   grad_drop<<<blocks, threads>>>(data, errors, cut_off, len);
+  
+  if (wow % 2000 == 0 || wow < 10){
+    cudaMemcpy(gray, data, len * sizeof(float), cudaMemcpyDeviceToHost);
+  
+    int  x = 0;
+    for (int i=0;i< len;i++){
+      if (gray[i] == 0 )
+        x++;
+    }
+
+    std::cerr<<"dropping "<<(float)x / len<<std::endl;
+  }
 }
 
 
@@ -91,12 +103,13 @@ void grad_drop(ExpressionGraphPtr graph, float rate){
       grad_drop_do(param->grad()->data(), d_error + pos, len, rate);
       pos += len;
     }
-    if (wow-- > 0){
-    
+
+    if (wow % 2000 == 0|| wow < 10 > 0){
       thrust::device_ptr<float> dev_data_ptr(graph->params().grads()->data());
       int x = thrust::count(dev_data_ptr, dev_data_ptr + f_len, 0);
       std::cerr<<"overall dropping "<<(float)x / f_len<<std::endl;
     }
+    wow++;
 }
 
 
@@ -187,7 +200,7 @@ class Adam : public OptimizerBase {
       float denom1 = 1 - pow(beta1_, t_);
       float denom2 = 1 - pow(beta2_, t_);
 
-      grad_drop(graph, 0.99);
+      grad_drop(graph, 0.87);
 
       Tensor pv = graph->params().vals();
       Tensor pg = graph->params().grads();
