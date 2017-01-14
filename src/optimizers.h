@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <cmath>
 #include <boost/any.hpp>
 #include "tensor_operators.h"
 #include <thrust/sort.h>
@@ -21,12 +22,11 @@ static float *temp_d;
 static float *d_error;
 
 
-__global__ void grad_drop(float* data, float* errors, float* threshold_ptr, int max_size){
+__global__ void grad_drop(float* data, float* errors, float cut_off, int max_size){
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
-  float cut_off = threshold_ptr[0];
   if (idx >= max_size)
     return;
-  if (abs(data[idx]) <= cut_off){
+  if (std::abs(data[idx])  <= cut_off){
     errors[idx] = data[idx];
     data[idx] = 0;
   }else{
@@ -41,39 +41,39 @@ __global__ void grad_add_error(float* data, float* errors, int max_size){
   data[idx] += errors[idx];
 }
 
-
-
-struct t_abs
-{
-  __host__ __device__
-  void operator()(float &x)
-  {
-    x = abs(x);
-  }
-};
+__global__ void full_abs(float* data, int max_size){
+  int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  if (idx >= max_size)
+    return;
+  data[idx] = abs(data[idx]);
+}
 
 
 static int wow = 10;
-
-void grad_drop_do(float* data, float* errors, float* tmp_data, int len, float rate){
-  int threads = 512;
+static float gray[5000000];
+void grad_drop_do(float* data, float* errors, int len, float rate){
+  int threads = 256;
   int blocks = 1 + len/threads;
   grad_add_error<<<blocks, threads>>>(data, errors, len);
-  thrust::device_ptr<float> dev_data_ptr(tmp_data);
-  thrust::for_each(dev_data_ptr, dev_data_ptr + len, t_abs());
+
+  cudaMemcpy(temp_d, data, len * sizeof(float), cudaMemcpyDeviceToDevice);
+  full_abs<<<blocks, threads>>>(temp_d,len);
+
+  thrust::device_ptr<float> dev_data_ptr(temp_d);
   thrust::sort(dev_data_ptr, dev_data_ptr + len); // OVERKILL. Too slow and need extra memory. Need to replace with faster k-th selection. (inplace Radix Select?)
   int cut_index = len * rate;
   if (cut_index >= len)
     cut_index = len -1;
-
-  grad_drop<<<blocks, threads>>>(data, errors, tmp_data + cut_index, len);
-
+  float cut_off;
+  cudaMemcpy(&cut_off, temp_d + cut_index, sizeof(float), cudaMemcpyDeviceToHost);
+  
+  grad_drop<<<blocks, threads>>>(data, errors, cut_off, len);
 }
 
 
 void grad_drop(ExpressionGraphPtr graph, float rate){
     int f_len = graph->params().grads()->size();
-
+   
     if (!has_init){
       has_init = true;
       int extra = (2 * f_len * sizeof(float)) / (1024 * 1024);
@@ -83,13 +83,19 @@ void grad_drop(ExpressionGraphPtr graph, float rate){
     }
     
 
-    cudaMemcpy(temp_d,graph->params().grads()->data(), f_len * sizeof(float), cudaMemcpyDeviceToDevice);
+    // cudaMemcpy(temp_d,graph->params().grads()->data(), f_len * sizeof(float), cudaMemcpyDeviceToDevice);
     int pos = 0;
     for(auto& param : graph->params()){
       //std::cerr<<param->grad()->shape()[0]<<" x "<<param->grad()->shape()[1]<<std::endl;
       int len = param->grad()->size();
-      grad_drop_do(param->grad()->data(), d_error + pos, temp_d + pos, len, rate);
+      grad_drop_do(param->grad()->data(), d_error + pos, len, rate);
       pos += len;
+    }
+    if (wow-- > 0){
+    
+      thrust::device_ptr<float> dev_data_ptr(graph->params().grads()->data());
+      int x = thrust::count(dev_data_ptr, dev_data_ptr + f_len, 0);
+      std::cerr<<"overall dropping "<<(float)x / f_len<<std::endl;
     }
 }
 
