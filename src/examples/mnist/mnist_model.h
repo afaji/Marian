@@ -9,7 +9,7 @@
 #include "common/definitions.h"
 #include "common/keywords.h"
 #include "graph/expression_graph.h"
-
+#define LAYER_SIZE  4096
 
 namespace marian {
 namespace models {
@@ -18,7 +18,7 @@ class MNISTModel {
   private:
     Ptr<Config> options_;
     bool inference_{false};
-    std::vector<int> dims_{784, 2048, 2048, 10};
+    std::vector<int> dims_{784, LAYER_SIZE, LAYER_SIZE, LAYER_SIZE, 10};
 
   public:
 
@@ -81,16 +81,17 @@ class MNISTModel {
       if(i == 0) {
         // Create a dropout node as the parent of x,
         //   and place that dropout node as the value of layers[0]
-        layers.emplace_back(dropout(x, dropout_prob=0.2));
+        //layers.emplace_back(dropout(x, dropout_prob=0.1));
+        layers.emplace_back(x);
       } else {
         // Multiply the matrix in layers[i-1] by the matrix in weights[i-1]
         // Take the result, and perform matrix addition on biases[i-1].
         // Wrap the result in rectified linear activation function,
         // and finally wrap that in a dropout node
-        layers.emplace_back(
-            dropout(relu(affine(layers.back(), weights.back(), biases.back())),
-                    dropout_prob=0.5));
+        //layers.emplace_back(dropout(relu(affine(layers.back(), weights.back(), biases.back())),dropout_prob=0.1));
+        layers.emplace_back(relu(affine(layers.back(), weights.back(), biases.back())));
       }
+
 
       // Construct a weight node for the outgoing connections from layer i
       weights.emplace_back(

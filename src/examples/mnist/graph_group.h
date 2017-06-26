@@ -487,7 +487,7 @@ class MNISTAsyncGraphGroup : public MNISTGraphGroup {
 
         if(drop_rate_ && first_) {
           int totalSize = graphs_[0]->params()->vals()->size();
-          int sparseCap = totalSize / 10;
+          int sparseCap = totalSize * (1 - drop_rate_)*1.2;
           for (auto device : devices_){
             sparseGrads_.push_back( SparseTensor(new SparseTensorBase( sparseCap, device )) );
             localSparseGrads_.push_back( SparseTensor(new SparseTensorBase(sparseCap , device )) );
@@ -512,12 +512,17 @@ class MNISTAsyncGraphGroup : public MNISTGraphGroup {
         thread_local GradientDrop dropper;
 
         thread_local size_t my_id = 0;
-
+	std::vector<std::pair<int,int>> layer_sizes;
         if(!graph) {
           std::lock_guard<std::mutex> lock(sync_);
           my_id = i;
           graph = graphs_[i];
           builder = builders_[i++];
+
+          
+          for (auto& x: graph->params()->getMap())
+            layer_sizes.push_back({x.second->shape()[0], x.second->shape()[1]});
+
 
           if (drop_rate_)
             tmpDelta.push_back( newTensor( graph->params()->vals()->size() , graph->params()->vals()->getDevice() ) );
@@ -548,7 +553,7 @@ class MNISTAsyncGraphGroup : public MNISTGraphGroup {
 
         cudaStreamSynchronize(0);
         if (drop_rate_){
-          dropper->dropGraph(graph->params()->grads() , localSparseGrads_[my_id] , drop_rate_ );
+          dropper->dropGraph(graph->params()->grads() , localSparseGrads_[my_id] , drop_rate_, layer_sizes );
           sparsePush(localSparseGrads_[my_id]);
         }
         else
