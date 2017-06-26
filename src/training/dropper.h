@@ -249,17 +249,14 @@ class GradientDropBase{
         float mean2 = min_val + bucket_size;
 
         if (COLWISE && col_size != 1){
-            if (step == 0) std::cout<<"COLUMN WISE.."<<std::endl;
  	    column_wise_quantize<<<col_size, 512>>>(data, tmp, errors, min_val, row_size, len);
             return;
         }
 
         if (MIN_DROP){
-            if (step == 0) std::cout<<"MIN-BASED QUANTIZATION.."<<std::endl;
             grad_drop_quantized<<<blocks, threads>>>(data, tmp, errors, min_val, bucket_size, bucket_count - 1, len);
             return;
         }
-        if (step == 0) std::cout<<"AVG-BASED QUANTIZATION.."<<std::endl;
         int* result;
         int idx;
         cudaMalloc(&result, sizeof(int));
