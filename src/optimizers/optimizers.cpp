@@ -141,17 +141,21 @@ void Adam::updateImpl(Tensor params, Tensor grads) {
   t_++;
   float denom1 = 1 - std::pow(beta1_, t_);
   float denom2 = 1 - std::pow(beta2_, t_);
-
   using namespace functional;
+  if (t_ < 10)
+    LOG(info, "staleness {}", staleFactor_);
+  //Element(_1 /= (1 + staleFactor_), grads);
+  //staleFactor_ = 0;
 
-  Element(_1 = (beta1_ * _1) + ((1 - beta1_) * _2), mt_, grads);
-  Element(_1 = (beta2_ * _1) + ((1 - beta2_) * (_2 * _2)), vt_, grads);
-
-  Element(_1 -= (multiplyFactor_ * eta_) * (_2 / denom1)
-                / (sqrt(_3 / denom2) + eps_),
+  Element(_1 = if_then_else(_2 != 0.0, (beta1_ * _1) + ((1 - beta1_) *  _2)  , _1) , mt_, grads);
+  Element(_1 = if_then_else(_2 != 0.0, (beta2_ * _1) + ((1 - beta2_) *  (_2 * _2)) , _1) , vt_, grads);
+  // multiplyFactor_ = std::pow(0.5, staleFactor_);
+  Element(_1 = if_then_else(_4 != 0.0, _1 - (multiplyFactor_ * eta_) * (_2 / denom1)
+                / (sqrt(_3 / denom2) + eps_), _1),
           params,
           mt_,
-          vt_);
+          vt_,
+          grads);
 
   params->getBackend()->synchronize();
 }
@@ -259,6 +263,26 @@ void Adam::resetStats() {
   if(vt_)
     vt_->set(0.f);
 }
+
+
+
+void OptimizerBase::noising(Tensor params, float range, int seed) {
+    // random noising: 
+    if (!m) {
+      allocator_ = New<TensorAllocator>(params->getBackend());
+      allocator_->reserveExact(params->size() * sizeof(float));
+      allocator_->allocate(m, {1, params->size()});
+      LOG(info, "Allocating noise tensor");
+
+      gen = createRandomGenerator(seed, params->getDevice());
+      LOG(info, "generate randomizer");
+    }
+
+    gen->uniform(m, 1 - range, 1 + range);
+    //LOG(info, "generated");
+    using namespace functional;
+    Element(_1 = _1 * _2, params, m);
+  }
 
 Ptr<OptimizerBase> Optimizer(Ptr<Config> options) {
   float lrate = options->get<double>("learn-rate");

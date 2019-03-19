@@ -313,9 +313,7 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSparse() {
   }
  
   // START OF NO COMMUNICATION
-  bool local = false;
-  std::string local_mode = "replace";
-  
+  bool local = true;
   dropper->dropGraph(accGradientsSync,
                      clientGraphs_[0]->params()->grads(),
                      sparseGradient,
@@ -343,14 +341,13 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSparse() {
   //parallel while data transfer is happening:
   if (local) {
     //replace
-    if (local_mode == "replace") {
-      using namespace functional; //@TODO makes more sense to do that on the CPU i think
-      Element(_1 -= _2, accGradientsSync, clientGraphs_[0]->params()->grads());
-    }
+    using namespace functional; //@TODO makes more sense to do that on the CPU i think
+    Element(_1 -= _2, accGradientsSync, clientGraphs_[0]->params()->grads());
+
     //sum or replace
     clientGraphs_.back()->params()->grads()->copyFrom(accGradientsSync);
     // no error feed
-    // dropper->error()->set(0);
+    // dropper->error()->set(1);
   }
   
   MPI_Wait(&r1, MPI_STATUS_IGNORE);

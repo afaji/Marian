@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
         New<Train<MultiNodeGraphGroupSync>>(options)->run();
     }
   } else {
-    if(devices.size() == 1) {
+    if(devices.size() == -1) {
       New<Train<SingletonGraph>>(options)->run();
     } else {
       if(options->get<bool>("sync-sgd"))

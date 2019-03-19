@@ -119,8 +119,11 @@ protected:
   /**
    * Variables for gradient dropping
    */
-  std::vector<float> sparseGrad_cpu, gatherGrads_cpu;
-  std::vector<int> sparseIndices_cpu, gatherIndices_cpu;
+  // std::vector<std::vector<float>> sparseGrad_cpu;
+  // std::vector<std::vector<int>> sparseIndices_cpu;
+
+  std::vector<float> gatherGrads_cpu, sparseGrad_cpu;
+  std::vector<int> gatherIndices_cpu, sparseIndices_cpu;
   SparseTensor sparseGradient, sparseGather;
   GradientDrop dropper;  
 

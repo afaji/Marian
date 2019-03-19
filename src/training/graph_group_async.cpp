@@ -2,6 +2,8 @@
 #include "functional/functional.h"
 #include "tensors/tensor_operators.h"
 #include "data/corpus_base.h"
+#define GLOBAL_ACCUM 1
+#define DELAY_FETCH 1
 
 namespace marian {
 
@@ -26,11 +28,14 @@ void AsyncGraphGroup::fetchParams(Tensor oldParams,
         [&](int idx, int pos) {
           // individual mutex per-shard
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
-          oldParams->subtensor(pos, params[idx]->size())->copyFrom(params[idx]);
+          if (DELAY_FETCH == 1)
+            oldParams->subtensor(pos, params[idx]->size())->copyFrom(params[idx]);
+          else
+            oldParams->subtensor(pos, params[idx]->size())->copyFrom(delayedParams_[idx]);
         },
         idx,
         pos));
-
+    local_time[device_id] = global_time;
     pos += shardSize_;
   }
   for(auto&& t : threads) {
@@ -44,20 +49,39 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads,
   // add instead of copy?
   std::vector<std::thread> threads;
   int pos = 0;
+  int stale = global_time - local_time[device_id];
+
   for(int idx = 0; idx < devices_.size(); idx++) {
     threads.emplace_back(std::thread(
         [&](int idx, int pos) {
           // individual mutex per-shard
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
-          grads_[idx]->copyFrom(newGrads->subtensor(pos, grads_[idx]->size()));
+          
+          if (GLOBAL_ACCUM > 1) {
+          tmpGrads_[idx]->copyFrom(newGrads->subtensor(pos, tmpGrads_[idx]->size()));
+          // LOG(info, "copy success, add to main");
+          {
+            using namespace functional;
+            Element(_1 += _2, grads_[idx], tmpGrads_[idx]);
+          }
+          } else {
+            grads_[idx]->copyFrom(newGrads->subtensor(pos, grads_[idx]->size()));
+          }
+
+          // LOG(info, "add success");
+          if (++accummulate[idx] % GLOBAL_ACCUM)
+             return;
 
           if(scaleLearningRate_) {
             shardOpt_[idx]->update(
                 params_[idx], grads_[idx], batch_words / avgBatchWords_);
           } else {
-            shardOpt_[idx]->update(params_[idx], grads_[idx]);
+            shardOpt_[idx]->update_stale(params_[idx], grads_[idx], stale);
           }
-
+          grads_[idx]->set(0);
+          if (DELAY_FETCH > 1 && ++serverVersion[idx] % DELAY_FETCH == 0) {
+            delayedParams_[idx]->copyFrom(params_[idx]);
+          }
           if(movingAvg_)
             updateMovingAverage(
                 paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
@@ -69,6 +93,7 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads,
   }
   for(auto&& t : threads)
     t.join();
+  global_time++;
 }
 
 void AsyncGraphGroup::updateMovingAverage(Tensor paramsAvg,
@@ -114,12 +139,25 @@ void AsyncGraphGroup::init(Ptr<data::Batch> batch) {
       param->copyFrom(graphs_[0]->params()->vals()->subtensor(pos, __size__));
       params_.push_back(param);
 
+
+      Tensor delayParam;
+
+      Ptr<TensorAllocator> delayAllocator_
+          = New<TensorAllocator>(graph->getBackend());
+
+      delayAllocator_->reserveExact(__size__ * sizeof(float));
+      delayAllocator_->allocate(delayParam, {1, __size__});
+      gradsAlloc_.push_back(delayAllocator_);
+      delayParam->copyFrom(graphs_[0]->params()->vals()->subtensor(pos, __size__));
+      delayedParams_.push_back(delayParam);
+
+
       pos += __size__;
     }
   }
   if(grads_.size() == 0) {
     int totalSize = graphs_[0]->params()->vals()->size();
-
+    LOG(info, "init grads");
     for(auto graph : graphs_) {
       int __size__ = std::min(shardSize_, totalSize);
       totalSize -= __size__;
@@ -131,7 +169,20 @@ void AsyncGraphGroup::init(Ptr<data::Batch> batch) {
       allocator_->allocate(grad_, {1, __size__});
       gradsAlloc_.push_back(allocator_);
       grads_.push_back(grad_);
+      
+
+      Tensor tmpGrad_;
+      Ptr<TensorAllocator> tmpAllocator_
+          = New<TensorAllocator>(graph->getBackend());
+
+      tmpAllocator_->reserveExact(__size__ * sizeof(float));
+      tmpAllocator_->allocate(tmpGrad_, {1, __size__});
+      gradsAlloc_.push_back(tmpAllocator_);
+      tmpGrads_.push_back(tmpGrad_); 
+      accummulate.push_back(0);
+
     }
+    LOG(info, "init OK");
   }
   if(movingAvg_) {
     if(paramsAvg_.size() == 0) {
@@ -161,7 +212,13 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
   if(first_) {
     init(batch);
     first_ = false;
+
+    for (int i=0;i<999;i++) {
+      currVersion[i] = -1;
+      serverVersion[i] = 0;
+    }
   }
+
 
   auto task = [this](Ptr<data::Batch> batch) {
     static size_t i = 0;
@@ -193,7 +250,7 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
     graph->forward();
     cost += costNode->scalar();
     graph->backward();
-
+    
     Tensor gradients;
     if(tau_ > 1) {
       if(t == 0) {
@@ -206,15 +263,14 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
       using namespace functional;
       Element(_1 += _2, accGradients, graph->params()->grads());
       gradients = accGradients;
-
-      // Keep track of how many words we've calculated the error from
-      num_seen_words += batch->words();
-      num_seen_trg += batch->wordsTrg();
-      num_seen_sentences += batch->size();
     } else {
       gradients = graph->params()->grads();
-      num_seen_trg = batch->wordsTrg();
     }
+    
+    // Keep track of how many words we've calculated the error from
+    num_seen_words += batch->words();
+    num_seen_trg += batch->wordsTrg();
+    num_seen_sentences += batch->size();
 
     t++;
 
@@ -226,28 +282,28 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
         gradients->set(0);
     }
 
-    if(t % tau_ == 0 && scheduler_) {
+    if(t % GLOBAL_ACCUM * tau_ == 0 && scheduler_) {
       std::unique_lock<std::mutex> lock(schedulerMutex_);
-
+      if (t < 100) LOG(info, "updt step = {}", t);
       // Wait until the thread that wants to do validation is finished.
       pool_->wait_for_one(lock);
 
       if (options_->get<std::string>("cost-type") != "ce-sum")
-        cost /= tau_;
+        cost /= (GLOBAL_ACCUM * tau_);
 
-      if (tau_ > 1) {
+      if (GLOBAL_ACCUM * tau_ > 1) {
         std::vector<size_t> fakeLength = {1, 1};
         auto fb = data::CorpusBatch::fakeBatch(fakeLength,
                                           num_seen_sentences,
                                           NULL);
         fb->front()->setWords(num_seen_words);
         scheduler_->update(cost, fb);
-
-        num_seen_words = 0;
-        num_seen_sentences = 0;
       } else {
         scheduler_->update(cost, batch);
       }
+      
+      num_seen_words = 0;
+      num_seen_sentences = 0;
 
       cost = 0;
 

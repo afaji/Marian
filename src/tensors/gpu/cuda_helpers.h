@@ -29,6 +29,14 @@ void CudaCopy(const T* start, const T* end, T* dest) {
       (void*)dest, (void*)start, (end - start) * sizeof(T), cudaMemcpyDefault));
 }
 
+
+#define CURAND_CHECK(expr) do {                                          \
+  curandStatus_t rc = (expr);                                            \
+  ABORT_IF(rc != CURAND_STATUS_SUCCESS,                                  \
+          "Curand error {} - {}:{}: {}", rc, __FILE__, __LINE__, #expr); \
+} while(0)
+
+
 #define CUSPARSE_CHECK(x)                               \
   {                                                     \
     cusparseStatus_t _c = x;                            \

@@ -26,6 +26,7 @@ add_library(marian STATIC
   tensors/cpu/dropout.cpp
   tensors/cpu/prod.cpp
   tensors/cpu/tensor_operators.cpp
+  tensors/rand.cpp
 
   graph/expression_graph.cpp
   graph/expression_operators.cpp

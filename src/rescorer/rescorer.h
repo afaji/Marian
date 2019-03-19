@@ -141,6 +141,7 @@ public:
     }
 
     if(summarize) {
+      summary = "perplexity";
       float cost = 0;
       if(summary == "perplexity")
         cost = std::exp(-(float)sumCost / (float)sumWords);

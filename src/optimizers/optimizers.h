@@ -10,6 +10,9 @@
 #include "tensors/backend.h"
 #include "tensors/tensor.h"
 #include "training/training_state.h"
+#include "tensors/rand.h"
+
+#include "functional/functional.h"
 
 namespace marian {
 
@@ -17,6 +20,9 @@ namespace marian {
  * Base class for optimizers.
  */
 class OptimizerBase : public TrainingObserver {
+  Ptr<TensorAllocator> allocator_;
+  Ptr<RandomGenerator> gen;
+  Tensor m;
 public:
   OptimizerBase(float eta, Ptr<ClipperBase> clipper = nullptr)
       : eta_(eta), clipper_(clipper) {}
@@ -26,6 +32,7 @@ public:
     Tensor g = graph->params()->grads();
 
     update(p, g, multiplyFactor);
+
   }
 
   void update(Tensor params, Tensor grads, float multiplyFactor = 1.0f) {
@@ -34,8 +41,19 @@ public:
 
     // In case we want to add a multiply factor to our learning rate
     multiplyFactor_ = multiplyFactor;
+    staleFactor_ = 0;
     updateImpl(params, grads);
   }
+
+  void update_stale(Tensor params, Tensor grads, int stale) {
+    if(clipper_)
+      clipper_->clip(grads);
+    
+    staleFactor_ = stale;
+    updateImpl(params, grads);
+  }
+
+  void noising(Tensor params, float range, int seed=0);
 
   virtual void init(TrainingState& state) {
     eta_ = state.eta;
@@ -79,6 +97,9 @@ protected:
   float eta_;
   // Compensates for larger batch
   float multiplyFactor_;
+
+  int staleFactor_;
+
   // Clip gradient norm
   Ptr<ClipperBase> clipper_;
 };

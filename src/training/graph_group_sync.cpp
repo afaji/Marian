@@ -50,6 +50,7 @@ void SyncGraphGroup::execute(Ptr<data::Batch> fullBatch) {
   std::vector<float> costs(devices_.size(), 0.f);
 
   size_t t = 1;
+  static int t2 = 1;
   for(auto batch : delayedBatches) {
     std::vector<Ptr<data::Batch>> batches = batch->split(devices_.size());
 
@@ -121,27 +122,28 @@ void SyncGraphGroup::execute(Ptr<data::Batch> fullBatch) {
 
       first_ = false;
     }
-
     {
-      auto task = [this, &costs, batches](size_t idx) {
+      auto task = [this, &t, &costs, batches](size_t idx) {
         auto graph = graphs_[idx];
         auto batch = batches[idx];
 
         if(batch->size() > 0) {
+          // random noise
+          // shardOpt_[idx]->noising(graph->params()->vals(), 0.1, idx);
+          
           auto costNode = builders_[idx]->build(graph, batch);
           graph->forward();
           costs[idx] += costNode->scalar();
           graph->backward();
         }
-      };
+     };
 
       ThreadPool pool(devices_.size(), devices_.size());
       for(int idx = 0; idx < batches.size(); ++idx)
         pool.enqueue(task, idx);
     }
-
     {
-      auto task = [this, batches](size_t idx, int pos, bool update) {
+      auto task = [this, &t2, batches](size_t idx, int pos, bool update) {
         int size = params_[idx]->size();
         int i = 0;
 
@@ -157,12 +159,16 @@ void SyncGraphGroup::execute(Ptr<data::Batch> fullBatch) {
             auto subGrad = graph->params()->grads()->subtensor(pos, size);
             tmpTensors_[idx]->copyFrom(subGrad);
 
+            // Individual update
+            // shardOpt_[idx]->update(params_[idx], tmpTensors_[idx]);
+
             using namespace functional;
             Element(_1 = _1 + (_2 / div), grads_[idx], tmpTensors_[idx]);
           }
           i++;
         }
 
+        
         if(update) {
           shardOpt_[idx]->update(params_[idx], grads_[idx]);
           grads_[idx]->set(0.f);
@@ -170,11 +176,13 @@ void SyncGraphGroup::execute(Ptr<data::Batch> fullBatch) {
           if(movingAvg_)
             updateMovingAverage(
               paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
-
+          int pid = 0;
           for(auto graph : graphs_) {
             auto subParam = graph->params()->vals()->subtensor(pos, size);
-            subParam->copyFrom(params_[idx]);
-          }
+              if (t2 % 4 == pid % 4) 
+              subParam->copyFrom(params_[idx]);
+              pid++;
+           }
         }
 
       };
@@ -189,7 +197,7 @@ void SyncGraphGroup::execute(Ptr<data::Batch> fullBatch) {
 
     t++;
   }
-
+  t2++;
   float cost = 0;
   for(auto& c : costs) {
     cost += c;

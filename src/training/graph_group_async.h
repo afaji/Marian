@@ -19,6 +19,10 @@ public:
 
 protected:
   bool first_{true};
+  int global_time{0};
+  int local_time[999];
+  
+  int currVersion[999], serverVersion[999];
 
   std::vector<Ptr<models::ModelBase>> builders_;
   std::vector<Ptr<ExpressionGraph>> graphs_;
@@ -27,12 +31,15 @@ protected:
   std::mutex sync_;
   std::vector<std::mutex> shardSync_;
 
+  std::vector<int> accummulate;
+
+
   std::mutex schedulerMutex_;
 
   std::vector<Tensor> params_;
   std::vector<Ptr<TensorAllocator>> paramsAlloc_;
 
-  std::vector<Tensor> grads_;
+  std::vector<Tensor> grads_, tmpGrads_, delayedParams_;
   std::vector<Ptr<TensorAllocator>> gradsAlloc_;
 
   std::vector<Ptr<OptimizerBase>> shardOpt_;
