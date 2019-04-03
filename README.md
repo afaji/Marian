@@ -7,14 +7,16 @@ Use compression script in 'scripts/compress.py'
 
 
 Usage:
-'python3 scripts/compress.py -i ORIGINAL_MODEL_PATH -o COMPRESSED_MODEL_PATH -b COMPRESSION_BIT'
 
-use -c to clip before compression
+`python3 scripts/compress.py -i ORIGINAL_MODEL_PATH -o COMPRESSED_MODEL_PATH -b COMPRESSION_BIT`
+
+use `-c` to clip before compression
 
 ## How to Retrain
 
-To train in compressed format, set '--compress-bit B'.
-To enable model clipping before compressing, use '--compress-clip C'.
+To train in compressed format, set `--compress-bit B`.
+
+To enable model clipping before compressing, use `--compress-clip C`.
 
 make sure that the configuration is consistent with the compression script.
 
