@@ -101,9 +101,10 @@ add_dependencies(marian marian_version) # marian must depend on it so that it ge
 
 if(CUDA_FOUND)
 cuda_add_library(marian_cuda
+  optimizers/compresser.cu
   tensors/gpu/device.cu
   tensors/gpu/algorithm.cu
-  tensors/gpu/prod.cu
+  tensors/gpu/prod.cpp
   tensors/gpu/element.cu
   tensors/gpu/add.cu
   tensors/gpu/tensor_operators.cu

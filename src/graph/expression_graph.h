@@ -63,7 +63,7 @@ public:
       tensors_->allocate(node->grad(), node->shape(), node->value_type());
   }
 
-  void free(Tensor& tensor) { tensors_->free(tensor); }
+  void free(const Tensor& tensor) { tensors_->free(tensor); }
 
   // @TODO: get rid of this, not really used or can be done better
   Ptr<Allocator> allocator() { return tensors_->allocator(); }
@@ -222,7 +222,7 @@ public:
   void forwardNext() {
     // @TODO: check if allocation works properly
     tensors_->clearShorttermMemory();
-
+    static int step = 0;
     while(!nodesForward_.empty()) {
       auto v = nodesForward_.front();
       v->allocate();
@@ -230,13 +230,13 @@ public:
       v->forward();
 
       checkNan(v->val());
-
-      if(v->marked_for_debug()) {
+      
+      if(v->val()->getDeviceId().no == 0 && (step++ < 5 || v->marked_for_debug())) {
         std::cerr << "Debug: " << v->debug_message() << " op=" << v->type()
-                  << std::endl;
-        std::cerr << v->val()->debug() << std::endl;
+                  <<"  "<< v->name() << std::endl;
+        // std::cerr << v->val()->debug() << std::endl;
       }
-
+      
       if(inferenceOnly_)
         v->children().clear();
       nodesForward_.pop_front();
@@ -371,7 +371,7 @@ public:
                     Type::uint32);
   }
   // this version sets up the shape such that the indices are in a given axis
-  // Use this if you want to pass these indices to select().
+  // Use this if you want to pass these indices to gather().
   // indexee shape = (3, 2, 5, 2); axis = 1 -> resulting shape = (1, size of indicesVector, 1, 1)
   Expr indices(const std::vector<IndexType>& indicesVector, Expr indexee, int axis = -1) {
     Shape shape;
@@ -437,7 +437,7 @@ public:
       tensors_->allocateBackward(node);
   }
 
-  void free(Tensor& tensor) {
+  void free(const Tensor& tensor) {
     if(tensors_)
       tensors_->free(tensor);
   }

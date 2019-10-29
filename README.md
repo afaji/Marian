@@ -1,3 +1,25 @@
+This branch is the implementation of our paper: 
+https://arxiv.org/abs/1909.06091
+
+4-Bit Compression
+======
+First, train a normal Marian model.
+To compress the model, do
+
+```
+python3 scripts/compress.py -i model.npz --kmeans 5 --base 2 --skip_bias -o model.compressed.npz
+```
+
+Your `model.compressed.npz` is now quantized with 4-bits precision. Note that the values are still stored in 32-bits float for the current version, but there are only at-most 16 different values for each quantized tensor.
+
+4-Bit Retraining
+======
+
+To retrain the model with 4-bits precision, simply use `model.compressed.npz` as the initial model and run Marian with these extra commands:
+```
+--compress-bit 4 --compress-base 2 --compress-k-means 5 --compress-skip-bias 
+```
+
 Marian
 ======
 
@@ -8,33 +30,18 @@ Marian
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE.md)
 [![Twitter](https://img.shields.io/twitter/follow/marian_nmt.svg?style=social)](https://twitter.com/intent/follow?screen_name=marian_nmt)
 
- <p>
-  <b>Marian</b> is an efficient Neural Machine Translation framework written
-  in pure C++ with minimal dependencies. 
+*Marian* is an efficient Neural Machine Translation framework written in pure
+C++ with minimal dependencies.
 
-  Named in honour of Marian Rejewski, a Polish mathematician and cryptologist.
+Named in honour of Marian Rejewski, a Polish mathematician and cryptologist.
 
-  <!--It has mainly been developed at the
-  Adam Mickiewicz University in Poznań (AMU) and at the University of Edinburgh.-->
-  </p>
+Main features:
 
-  <!--p>
-  It is currently being deployed in
-  multiple European projects and is the main translation and training engine
-  behind the neural MT launch at the
-  <a href="http://www.wipo.int/pressroom/en/articles/2016/article_0014.html">World Intellectual Property Organization</a>.
-  </p-->
-
-  <p>
-  Main features:
-  <ul>
-    <li> Fast multi-gpu training and translation </li>
-    <li> Compatible with Nematus and DL4MT </li>
-    <li> Efficient pure C++ implementation </li>
-    <li> Permissive open source license (MIT) </li>
-    <li> <a href="https://marian-nmt.github.io/features/"> more details... </a> </li>
-  </ul>
-  </p>
+- Efficient pure C++ implementation
+- Fast multi-GPU training and GPU/CPU translation
+- State-of-the-art NMT architectures: deep RNN and transformer
+- Permissive open source license (MIT)
+- [more detail...](https://marian-nmt.github.io/features)
 
 If you use this, please cite:
 
@@ -59,20 +66,11 @@ Machine Translation in C++ (http://www.aclweb.org/anthology/P18-4020)
         url       = {http://www.aclweb.org/anthology/P18-4020}
     }
 
-<!--
-## Compilation
-
-```
-cd marian-dev
-mkdir -p build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j
-```
--->
-
 ## Amun
-The handwritten decoder for RNN models compatible with Marian and Nematus has been superseded by the Marian decoder. The code is available in a separate repository: https://github.com/marian-nmt/amun
+
+The handwritten decoder for RNN models compatible with Marian and Nematus has
+been superseded by the Marian decoder. The code is available in a separate
+repository: https://github.com/marian-nmt/amun
 
 ## Website
 

@@ -114,13 +114,13 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSync() {
   accGradientsSync->get(accGradientsSync_cpu);
 
   // Wait until all nodes are ready
-  mpi_->barrier();
+  MPI_Barrier(MPI_COMM_WORLD);
 
-  mpi_->allReduce(accGradientsSync_cpu.data(),  // CPU buffers
+  MPI_Allreduce(accGradientsSync_cpu.data(),  // CPU buffers
                   receiveBuffer_cpu.data(),
                   network_size,
                   MPI_FLOAT,
-                  MPI_SUM);
+                  MPI_SUM, MPI_COMM_WORLD);
 
   // Copy the data back to the GPU and do optimizer update
   // Do update with last GPU to distribute the memory
@@ -166,16 +166,18 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSync() {
  * @param batch Batch on which to perform forward and backward passes.
  */
 void MultiNodeGraphGroupSync::execute(Ptr<data::Batch> fullBatch) {
+  std::vector<Ptr<data::Batch>> batches = fullBatch->split(devices_.size());
+
   if(!initialized_) {
-    init(fullBatch);
+    LOG(info, "INIT NODES");
+    init(batches.front());
     initialized_ = true;
   }
 
-  std::vector<Ptr<data::Batch>> batches = fullBatch->split(devices_.size());
 
   static int t = 0;
 
-  static float cost = 0;
+  static StaticLoss loss;
   static size_t num_seen_words = 0;
   static size_t num_seen_sentences = 0;
 
@@ -185,7 +187,7 @@ void MultiNodeGraphGroupSync::execute(Ptr<data::Batch> fullBatch) {
       auto graph = clientGraphs_[my_id];
       auto builder = clientBuilders_[my_id];
 
-      auto costNode = builder->build(graph, batch);
+      auto lossNode = builder->build(graph, batch);
 
       if(t == 0) {
         if(my_id != 0)
@@ -195,7 +197,7 @@ void MultiNodeGraphGroupSync::execute(Ptr<data::Batch> fullBatch) {
       graph->forward();
       {
         std::lock_guard<std::mutex> guard(sumCostMutex_);
-        cost += costNode->scalar();
+        loss += *lossNode;
         num_seen_words += batch->words();
         num_seen_sentences += batch->size();
       }
@@ -219,26 +221,23 @@ void MultiNodeGraphGroupSync::execute(Ptr<data::Batch> fullBatch) {
 
   // Run scheduler (if enabled)
   if(t % tau_ == 0 && scheduler_) {
-    if(options_->get<std::string>("cost-type") != "ce-sum")
-      cost /= (tau_ * devices_.size());
-
     if(tau_ > 1) {
       std::vector<size_t> fakeLength = {1, 1};
-      auto fb
-          = data::CorpusBatch::fakeBatch(fakeLength, num_seen_sentences, NULL);
+      auto fb = data::CorpusBatch::fakeBatch(fakeLength, std::vector<Ptr<Vocab>>(), num_seen_sentences, NULL);
       fb->front()->setWords(num_seen_words);
-      scheduler_->update(cost, fb);
+      scheduler_->update(loss, fb);
     } else {
-      scheduler_->update(cost, fullBatch);
+      scheduler_->update(loss, fullBatch);
     }
 
     num_seen_words = 0;
     num_seen_sentences = 0;
-    cost = 0;
+    loss.reset();
 
     if((scheduler_->saving() || scheduler_->validating())) {
-      // wait until other nodes are ready
-      mpi_->barrier();
+      // wait until other nodes are ready  
+      MPI_Barrier(MPI_COMM_WORLD);
+
 
       // TODO: Saving is broken
       // if(mpi_->myMPIRank() == 0 && scheduler_->saving())
@@ -260,8 +259,9 @@ void MultiNodeGraphGroupSync::execute(Ptr<data::Batch> fullBatch) {
             graph->params()->vals()->copyFrom(accGradientsSync);
       }
 
-      // inform other nodes to continue
-      mpi_->barrier();
+      // inform other nodes to continue  
+      MPI_Barrier(MPI_COMM_WORLD);
+
     }
   }
 }
