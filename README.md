@@ -20,6 +20,8 @@ To retrain the model with 4-bits precision, simply use `model.compressed.npz` as
 --compress-bit 4 --compress-base 2 --compress-k-means 5 --compress-skip-bias 
 ```
 
+*note: do NOT use exponential-smoothing, otherwise, the trained model won't be quantized. (or you can see your orig model)*
+
 Marian
 ======
 
