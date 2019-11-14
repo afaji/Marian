@@ -7,7 +7,7 @@ First, train a normal Marian model.
 To compress the model, do
 
 ```
-python3 scripts/compress.py -i model.npz --kmeans 5 --base 2 --skip_bias -o model.compressed.npz
+python3 scripts/simulate-compression.py -i model.npz --kmeans 5 --skip_bias -o model.compressed.npz
 ```
 
 Your `model.compressed.npz` is now quantized with 4-bits precision. Note that the values are still stored in 32-bits float for the current version, but there are only at-most 16 different values for each quantized tensor.
