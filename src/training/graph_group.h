@@ -152,8 +152,13 @@ public:
 
     // Set up devices for this node
     std::vector<size_t> devices; // set of GPU device ids for this MPI process
-    for (auto& d : Config::getDevices(options_))
-      devices.push_back(d.no);
+    for (size_t i = 0; i < mpi_->numMPIProcesses(); i++) {
+      devices.push_back(Config::getDevices(options_).size());
+      for (auto& d : Config::getDevices(options_)) {
+        devices.push_back(d.no);
+      }
+    }
+
     loadDeviceConfig(devices); // set up numberClientsOfNodes_[] and devices_[]
 
     // Create builders and graphs for clients; that is, for each GPU we use on this node.
@@ -175,6 +180,15 @@ public:
   //     - GPU ids for that node
   // e.g. 0:0 1 1: 2 3 -> (2, (0, 1)) (2, (2,3))
   void loadDeviceConfig(std::vector<size_t> deviceConfig) {
+    for (int i:deviceConfig)
+      LOG(info, "device {} ", i);
+
+    // deviceConfig.clear();
+    // for (int i=0;i < mpi_->numMPIProcesses();i++){
+    //  deviceConfig.push_back(4);
+    //  for (int j=0;j < 4;j++)
+    //    deviceConfig.push_back(j);
+    // }
     // parse device config array
     size_t index = 0; // cursor for next()
     auto next = [&]() { // helper function to get the next item
@@ -183,10 +197,12 @@ public:
     };
     std::vector<std::vector<size_t>> allDevices(mpi_->numMPIProcesses());
     for (auto& devices : allDevices) {
-      devices.resize(next());
+      int new_size = next();
+      devices.resize(new_size);
       for (auto& device : devices)
         device = next();
     }
+    if (mpi_->myMPIRank() == 0)  LOG(info, "INDEX {} vs SIZE {} {}", index, deviceConfig.size(), mpi_->numMPIProcesses());
     ABORT_IF(index != deviceConfig.size(), "mal-formed device config array??");
 
     // validate

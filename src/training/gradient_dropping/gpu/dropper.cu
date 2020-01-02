@@ -8,28 +8,28 @@
 #include "training/gradient_dropping/dropper.h"
 #include "training/gradient_dropping/sparse_tensor.h"
 
-#include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/copy.h>
 
 namespace marian {
 
 namespace gpu {
 
 __global__ void sampling(float* originalData,
-                         float* data,
-                         int size,
-                         int scale,
-                         int fullSize) {
+                               float* data,
+                               int size,
+                               int scale,
+                               int fullSize) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if(idx >= size)
     return;
   data[idx] = abs(originalData[idx * scale]);
 }
 
-float GradientDropBase::find_threshold(Tensor grads, float rate) {
+float GradientDropBase::find_threshold(Tensor grads, float rate) { 
   cudaSetDevice(grads->getDeviceId().no);
 
   int size = grads->size();
@@ -38,7 +38,8 @@ float GradientDropBase::find_threshold(Tensor grads, float rate) {
   int sortSize = min(100000, size);
   int blocksSample = 1 + sortSize / threads;
 
-  if(!tmp) {
+
+  if (!tmp) {
     tmp = newTensor(sortSize, grads->getBackend());
   }
 
@@ -49,13 +50,13 @@ float GradientDropBase::find_threshold(Tensor grads, float rate) {
 
   int cut_index = std::max(0, (int)(sortSize * rate) - 1);
   float t;
-  cudaMemcpy(
-      &t, tmp->data() + cut_index, sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&t, tmp->data() + cut_index, sizeof(float), cudaMemcpyDeviceToHost);
 
   return t;
 }
 
 void GradientDropBase::dropGraph(Tensor grads,
+                                 Tensor sparseGrads,
                                  SparseTensor destination,
                                  float rate,
                                  float momentum) {
@@ -66,31 +67,47 @@ void GradientDropBase::dropGraph(Tensor grads,
   }
 
   if(!velocity && momentum > 0.0) {
+    LOG(info, "apply momentum");
     velocity = newTensor(grads->size(), grads->getBackend());
   }
 
+  // step 0 (optional) : Nesterov momentum
+  if (momentum > 0.0) {
+    using namespace functional;
+    marian::gpu::Element(_1 = momentum * (_1 + _2), velocity, grads);
+  }
   // Step 1: add residual to the current gradient
   {
     using namespace functional;
-    marian::gpu::Element(_1 = _1 + _2, grads, residual);
+    if (momentum == 0.0) 
+      marian::gpu::Element(_1 = _2 + _3, sparseGrads, grads, residual);
+    else
+      marian::gpu::Element(_1 = _2 + _3 + _4, sparseGrads, grads, residual, velocity);
   }
 
-  // step 2: find threshold
-  float t = find_threshold(grads, rate);
+  // step 2: find threshold 
+  float t = find_threshold(sparseGrads, rate);
 
   // step 3: drop gradients lower than threshold
   //         store gradients lower than threshold into the residual
   {
     using namespace functional;
-    marian::gpu::Element(
-        _1 = if_then_else(abs(_2) > t, 0, _2), residual, grads);
-    marian::gpu::Element(_1 = if_then_else(abs(_1) <= t, 0, _1), grads);
+    marian::gpu::Element(_1 = if_then_else(abs(_2) > t, 0, _2), residual, sparseGrads);
+    marian::gpu::Element(_1 = if_then_else(abs(_1) <= t, 0, _1), sparseGrads);
+    // momentum factor masking
+    if (velocity)
+      marian::gpu::Element(_1 = if_then_else(abs(_2) > t, 0, _1), velocity, sparseGrads);
   }
 
-  destination->fromDense(grads);
+  if (grads->size() * (1.0 - rate) >= destination->capacity()) 
+  {
+    //LOG(info, "SKIPPING SPARSIFICATION");
+    return;
+  }
+  destination->fromDense(sparseGrads);
 
   step++;
 }
 
-}  // namespace gpu
-}  // namespace marian
+}
+}

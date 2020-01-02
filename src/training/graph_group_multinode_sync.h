@@ -8,6 +8,11 @@
 #include <future>
 #include <thread>
 
+
+
+#include "training/gradient_dropping/dropper.h"
+#include "training/gradient_dropping/sparse_tensor.h"
+
 namespace marian {
 
 /**
@@ -55,6 +60,10 @@ private:
    * Variables for optimizer delay and synchronous SGD
    */
   size_t tau_{1};
+
+  float droping_rate{0.99};
+  float dropping_momentum{0};
+
   std::mutex sumGradientMutex_;
   std::mutex updateParamsMutex_;
   std::mutex sumCostMutex_;
@@ -74,6 +83,11 @@ private:
 
   bool movingAvg_{false};
   float mvDecay_{1e-4f};
+
+  std::vector<float> gatherGrads_cpu, sparseGrad_cpu;
+  std::vector<int> gatherIndices_cpu, sparseIndices_cpu;
+  SparseTensor sparseGradient, sparseGather;
+  GradientDrop dropper;  
 
   /**
    * Allocate new tensor on given GPU and store allocator.
@@ -119,11 +133,23 @@ private:
 
   void sumGRAD(Tensor gradient);
 
+  /*
+   * helper function - apply optimizer and moving average
+   */
+  void performUpdate();
+
+  /*
+   * helper function - synchronize all gpu parameters on a node
+   */
+  void nodeParamSync();
+
+
   /**
    * Does the MPI Communication, parameter update and copying back parameters.
    * @TODO ALHAM. God function too godly?
    */
-  void sendReceiveUpdateSync();
+  void sendReceiveUpdateSync(Tensor grad);
+  void sendReceiveUpdateSparse();
 
   void execute(Ptr<data::Batch> batch);
 
@@ -134,6 +160,8 @@ public:
   MultiNodeGraphGroupSync(Ptr<Options> options, Ptr<IMPIWrapper> mpi)
       : Base(options, mpi),
         tau_{(size_t)options_->get<double>("optimizer-delay")},
+        droping_rate{options->get<float>("grad-dropping-rate")},
+        dropping_momentum{options->get<float>("grad-dropping-momentum")},
         syncOptimizer_{Optimizer(options_)},
         movingAvg_{options_->get<float>("exponential-smoothing") > 0},
         mvDecay_{options_->get<float>("exponential-smoothing")} {
@@ -144,7 +172,8 @@ public:
    */
   void update(Ptr<data::Batch> batch) override {
     validate();
-    if(batchIter_ % mpi_->numMPIProcesses() == mpi_->myMPIRank()) {  // Only take batch assigned to this node
+    if(batchIter_ == 0 || batchIter_ % mpi_->numMPIProcesses() == mpi_->myMPIRank()) {  // Only take batch assigned to this node
+      // LOG(info, "Node {} executing batch {} [{}]", mpi_->myMPIRank(), batchIter_, batch);
       execute(batch);
     }
     batchIter_++;

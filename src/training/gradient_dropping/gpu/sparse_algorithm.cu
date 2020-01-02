@@ -33,7 +33,8 @@ __global__ void gScatterAdd(float* denseData,
   if(idx >= sparseSize)
     return;
   if(sparseIndices[idx] >= -offset && sparseIndices[idx] + offset < denseSize)
-    denseData[sparseIndices[idx] + offset] += sparseData[idx];
+    atomicAdd(&denseData[sparseIndices[idx] + offset], sparseData[idx]); 
+  // denseData[sparseIndices[idx] + offset] += sparseData[idx];
 }
 
 __global__ void gScatterUpdate(float* denseData,
@@ -113,6 +114,12 @@ void scatterAdd(Tensor t, float* data, int* indices, int size, int offset) {
   int blocks = 1 + size / threads;
   gScatterAdd<<<blocks, threads>>>(
       t->data(), data, indices, t->size(), size, offset);
+
+  /* static int cnt = 0;
+  if (cnt++ < 100) {
+    thrust::device_ptr<float> dev_data_ptr(t->data());
+    LOG(info, "ZEROS = {}", (float)thrust::count(dev_data_ptr, dev_data_ptr + t->size(), 0) / t->size());
+  }*/
   cudaStreamSynchronize(0);
 }
 
