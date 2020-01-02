@@ -258,47 +258,16 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateQuantized() {
  */
 void MultiNodeGraphGroupSync::sendReceiveUpdateSparse() {
   #if MPI_FOUND
-  // LOG(info, "MULAY");
 
   int network_size = accGradientsSync->size();
   int sparse_limit = sparseGrad_cpu.size();
   float curr_droping_rate = droping_rate;
-
-
-  static bool ok = false;
-  if (!ok) {
-    std::vector<float> x{ 100, -200, 300, 400, -400, 400};
-    auto t = newTensor(6, accGradientsSync->getBackend());
-    t->set(x);
-    auto sparse = SparseTensor(
-          new SparseTensorBase(4,
-                               accGradientsSync->getBackend()));
-    GradientDrop dropper = PrepareGradientDrop(accGradientsSync->getDevice());
-    dropper->dropGraph(t, sparse, 0.5, 0);
-    
-    t->get(x);
-    for (int i=0;i<6;i++) std::cout<<x[i]<<" "; std::cout<<std::endl;
-
-    float *dt = (float *)malloc(10*sizeof(float));
-    int *idc = (int *)malloc(10*sizeof(int));
-
-    cudaMemcpy(dt, sparse->data(), sparse->size()*sizeof(float) , cudaMemcpyDeviceToHost);
-    cudaMemcpy(idc, sparse->indices(), sparse->size()*sizeof(int), cudaMemcpyDeviceToHost);
-
-    for (int i=0;i<sparse->size();i++) std::cout<<dt[i]<<" : "<<idc[i]<<std::endl;
-    std::vector<float> y{ 100, 100, 100, 100, 100, 100};
-    t->set(y);
-    dropper->dropGraph(t, sparse, 0.5, 0);
-    t->get(y);
-    for (int i=0;i<6;i++) std::cout<<y[i]<<" "; std::cout<<std::endl;
-
-    ok = true;
-  }
   
   static int step = 0;
   
-  if (true && scheduler_->numberOfBatches() < 100) {
-    curr_droping_rate = std::pow(droping_rate, 100.0 / (1.0 + scheduler_->numberOfBatches()));
+  // warmup dropping ratio
+  if (true && scheduler_->numberOfBatches() < 1000) {
+    curr_droping_rate = std::pow(droping_rate, 1000.0 / (1.0 + scheduler_->numberOfBatches()));
     // LOG(info, "WARMUP DROPPING = {}", curr_droping_rate);
   }
 
@@ -311,21 +280,24 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSparse() {
     sparseGrad_cpu.resize(sparse_size);
     sparseIndices_cpu.resize(sparse_size * mpi_comm_world_size_);
   }
- 
-  // START OF NO COMMUNICATION
-  bool local = false;
-  std::string local_mode = "replace";
   
-  dropper->dropGraph(accGradientsSync,
-                     clientGraphs_[0]->params()->grads(),
-                     sparseGradient,
-                     curr_droping_rate,
-                     dropping_momentum);
+  // if the dropping ratio is too small, better send the whole gradient
   if (sparse_size > sparse_limit) {
     // LOG(info, "full sync");
     sendReceiveUpdateSync(clientGraphs_[0]->params()->grads());
     return;
   }
+ 
+  bool local = true;
+  std::string local_mode = "replace";
+  
+  // drop the gradient
+  dropper->dropGraph(accGradientsSync, // original gradient
+                     clientGraphs_[0]->params()->grads(), // resulting sparse gradient as a dense matrix will be here
+                     sparseGradient, // resulting sparse gradient will be here
+                     curr_droping_rate,
+                     dropping_momentum);
+
   // Copy the gradient and indices to CPU
   sparseGradient->get(sparseGrad_cpu, sparseIndices_cpu, sparse_size);
 
@@ -366,13 +338,10 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSparse() {
   else
   // if default 
     sparseGather->toDense(clientGraphs_.back()->params()->grads(), 0);
-
-  // END OF COMMUNICATION
-  // clientGraphs_.back()->params()->grads()->copyFrom(accGradientsSync);
   
   performUpdate();
 
-  if (local && step++ % 20 == 0) {
+  if (local && step++ % 500 == 0) {
     clientGraphs_.back()->params()->vals()->get(accGradientsSync_cpu);
     MPI_Allreduce(accGradientsSync_cpu.data(), //CPU buffers
               receiveBuffer_cpu.data(),
@@ -380,10 +349,9 @@ void MultiNodeGraphGroupSync::sendReceiveUpdateSparse() {
               MPI_FLOAT,
               MPI_SUM,
               MPI_COMM_WORLD);
-    if (step < 1000) LOG(info, "SYNC BRO");
     clientGraphs_.back()->params()->vals()->set(receiveBuffer_cpu);
     using namespace functional; //@TODO makes more sense to do that on the CPU i think
-    Element(_1 /= 4, clientGraphs_.back()->params()->vals());
+    Element(_1 /= mpi_comm_world_size_, clientGraphs_.back()->params()->vals());
   }
 
   nodeParamSync();
