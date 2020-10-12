@@ -13,6 +13,26 @@ namespace marian {
 
 class OutputPrinter {
 public:
+  std::vector<std::string> getAlts(Result result){
+    auto hyp = std::get<1>(result);
+    std::string past = "";
+    std::vector<std::string> outputs;
+    while (hyp) {
+      std::stringstream buffer;
+      // LOG(info, "{} {}", hyp->alt_words.size());
+      if (past.size())
+        buffer << past <<" ||| ";
+      past = (*vocab_)[hyp->getWord()];
+      for (int i = 0;i < hyp->alt_words.size(); i++)
+        buffer << " " << (*vocab_)[hyp->alt_words[i]] << " "<<hyp->alt_scores[i];
+      outputs.push_back(buffer.str());
+      hyp = hyp->getPrevHyp().get();
+    }
+
+    std::reverse(outputs.begin(), outputs.end());
+    return outputs;
+}
+
   OutputPrinter(Ptr<const Options> options, Ptr<const Vocab> vocab)
       : vocab_(vocab),
         reverse_(options->get<bool>("right-left")),
@@ -57,6 +77,10 @@ public:
       float realScore = std::get<2>(result);
       bestn << " ||| " << realScore;
 
+      auto outputs = getAlts(result);
+      for (auto& s: outputs)
+        bestn << std::endl << s;
+
       if(i < nbl.size() - 1)
         bestn << std::endl;
       else
@@ -65,13 +89,17 @@ public:
 
     auto result = history->top();
     auto words = std::get<0>(result);
+    
+    auto outputs = getAlts(result);
+    for (auto& s: outputs)
+      best1 << std::endl << s;
 
     if(reverse_)
       std::reverse(words.begin(), words.end());
 
     std::string translation = vocab_->decode(words);
 
-    best1 << translation;
+//    best1 << translation;
     if(!alignment_.empty()) {
       const auto& hypo = std::get<1>(result);
       best1 << " ||| " << getAlignment(hypo);

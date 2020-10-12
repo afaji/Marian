@@ -27,6 +27,9 @@ private:
       : prevHyp_(prevHyp), prevBeamHypIdx_(prevBeamHypIdx), word_(word), pathScore_(pathScore) {}
 
 public:
+ std::vector<float> alt_scores;
+ std::vector<Word> alt_words;
+
  // Use this whenever creating a pointer to MemoryPiece
  template <class ...Args>
  static PtrType New(Args&& ...args) {

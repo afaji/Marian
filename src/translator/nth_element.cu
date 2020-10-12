@@ -369,7 +369,7 @@ public:
                     std::vector<unsigned>& outKeys,
                     const bool isFirst) {
     cudaSetDevice(deviceId_.no);
-
+    // LOG(info, "AAAAA {}", scores->shape());
     const auto vocabSize = scores->shape()[-1];
     const auto inputN    = scores->shape()[-2];
     const auto dimBatch  = scores->shape()[-4];
@@ -377,13 +377,14 @@ public:
     ABORT_IF(vocabSize > MAX_VOCAB_SIZE, "GetNBestList(): actual vocab size {} exceeds MAX_VOCAB_SIZE of {}", vocabSize, MAX_VOCAB_SIZE);
     ABORT_IF(dimBatch > maxBatchSize_, "GetNBestList(): actual batch size {} exceeds initialization parameter {}", dimBatch, maxBatchSize_);
     ABORT_IF(std::max(N, (size_t)inputN) > maxBeamSize_, "GetNBestList(): actual beam size {} exceeds initialization parameter {}", N, maxBeamSize_);
-
+    // LOG(info, "baik-baik aja ");
     const std::vector<size_t> beamSizes(dimBatch, N);
     std::vector<int> cumulativeBeamSizes(beamSizes.size() + 1, 0);    
     std::vector<int> batchFirstElementIdxs(beamSizes.size() + 1, 0);
 
      for(size_t batchIdx = 0; batchIdx < beamSizes.size(); ++batchIdx) {
 #if 1
+      //LOG(info, "loop {}", batchIdx);
       cumulativeBeamSizes[batchIdx + 1] = (batchIdx + 1) * (int)N;
       batchFirstElementIdxs[batchIdx + 1] += (batchIdx + 1) * inputN * vocabSize;
       ABORT_IF(cumulativeBeamSizes[batchIdx + 1] != cumulativeBeamSizes[batchIdx] + (int)N, "cumulativeBeamSizes wrong??");
