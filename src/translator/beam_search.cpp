@@ -473,7 +473,7 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
       std::vector<float> nBestPathScores, ns;  // [currentDimBatch, maxBeamSize] flattened
  
       // get alternative words for each of the current words
-      for (int bm=0;bm < maxBeamSize; bm++) {
+      for (int bm=0;bm < beamSize_; bm++) {
         nk.clear(); ns.clear();
         // process the bm-th candidate
         auto tmp = slice(logProbs, 0, bm);
@@ -481,24 +481,24 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
 
 
         // TEMPORARY TENSOR SINCE APPARENTLY getNBestList MODIFIES THE TENSOR
-        static Ptr<TensorAllocator> alloc_[4];
-        static Tensor mt_[4];
+        static Ptr<TensorAllocator> alloc_[8];
+        static Tensor mt_[8];
 
-// lazy allocation
-  auto params = tmp->val();
-  int device = params->getBackend()->getDeviceId().no;
-  if(!alloc_[device])
-    alloc_[device] = New<TensorAllocator>(params->getBackend());
+        // lazy allocation
+        auto params = tmp->val();
+        int device = params->getBackend()->getDeviceId().no;
+        if(!alloc_[device])
+           alloc_[device] = New<TensorAllocator>(params->getBackend());
 
-  if(!mt_[device] || mt_[device]->size() < params->size()) {
-    LOG(info, "Alloc {}", params->shape());
-    // int elements = (int)params->size();
-    alloc_[device]->reserveExact(params->memory()->size());
-    alloc_[device]->allocate(mt_[device], params->shape());
-  }
-  auto mt2 = mt_[device]->subtensor(0, params->size());
-  mt2->shape() = params->shape();
-  mt2->copyFrom(params);
+        if(!mt_[device] || mt_[device]->size() < params->size()) {
+           LOG(info, "Alloc {}", params->shape());
+           // int elements = (int)params->size();
+           alloc_[device]->reserveExact(params->memory()->size());
+           alloc_[device]->allocate(mt_[device], params->shape());
+        }
+        auto mt2 = mt_[device]->subtensor(0, params->size());
+        mt2->shape() = params->shape();
+        mt2->copyFrom(params);
      
         getNBestList(/*in*/   mt2,   // [currentDimBatch, 1, maxBeamSize, dimVocab or dimShortlist]
                      /*N=*/   beamSize_,                 // desired beam size
@@ -510,14 +510,14 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
         // nk is [currentDimBatch, beamSize_] flattened. Extract the words from there
         for (int kk=0;kk< nk.size() ;kk++) {
             int batchId = (nk[kk] / vocabSize) / tmp->shape()[-2];
+ 
             int oriBatchId = -1;
             // get the true batchId, since some of the batch are skipped (already reached eos)
             for (int tmp = 0; tmp <= batchId; tmp++) {
               oriBatchId++;
-              while(oriBatchId < beams.size() && beams[oriBatchId].size() <= bm) oriBatchId++;
+              while(oriBatchId < beams.size() && beams[oriBatchId].size() == 0) oriBatchId++;
             }
-            if (oriBatchId >= beams.size()) continue;
-//            LOG(info, "{} {}", oriBatchId, Word::fromWordIndex(nk[kk] % vocabSize));
+            if (oriBatchId >= beams.size() || bm >= beams[oriBatchId].size()) continue;
             beams[oriBatchId][bm]->alt_words.push_back(Word::fromWordIndex(nk[kk] % vocabSize));
             beams[oriBatchId][bm]->alt_scores.push_back(ns[kk]);
           }
