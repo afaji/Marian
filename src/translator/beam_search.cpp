@@ -412,7 +412,6 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
       auto expandedPathScores = prevPathScores; // will become [maxBeamSize, 1, currDimBatch, dimVocab]
       Expr logProbs;
       for(size_t i = 0; i < scorers_.size(); ++i) {
-        LOG(info, "i = {} ", i);
         if (factorGroup == 0) {
           // compute output probabilities for current output time step
           //  - uses hypIndices[index in beam, 1, batch index, 1] to reorder scorer state to reflect the top-N in beams[][]
@@ -433,7 +432,6 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
             auto shortlist = scorers_[i]->getShortlist();
             logProbs = states[i]->getLogProbs().getFactoredLogits(factorGroup, shortlist); // [maxBeamSize, 1, currentDimBatch, dimVocab]
           }
-          auto pl = swapAxes(logProbs, 0, 2);
         }
         else {
           // add secondary factors
@@ -469,7 +467,7 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
 
       //**********************************************************************
       // perform beam search
-      auto pl = swapAxes(logProbs, 0, 2);
+      // auto pl = swapAxes(logProbs, 0, 2);
       // find N best amongst the (maxBeamSize * dimVocab) hypotheses
       std::vector<unsigned int> nBestKeys, nk; // [currentDimBatch, maxBeamSize] flattened -> (batchIdx, beamHypIdx, word idx) flattened
       std::vector<float> nBestPathScores, ns;  // [currentDimBatch, maxBeamSize] flattened
@@ -480,15 +478,35 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
         // process the bm-th candidate
         auto tmp = slice(logProbs, 0, bm);
         tmp = swapAxes(tmp, 0, 2);
-      
-        getAlternatives(/*in*/   tmp->val(),   // [currentDimBatch, 1, maxBeamSize, dimVocab or dimShortlist]
-                        /*N=*/   beamSize_,                 // desired beam size
-                        /*out*/  ns,
-                        /*out*/  nk,
-                        /*first=*/ 1); // @TODO: this is only used for checking presently, and should be removed altogether
+
+
+        // TEMPORARY TENSOR SINCE APPARENTLY getNBestList MODIFIES THE TENSOR
+        static Ptr<TensorAllocator> alloc_[4];
+        static Tensor mt_[4];
+
+// lazy allocation
+  auto params = tmp->val();
+  int device = params->getBackend()->getDeviceId().no;
+  if(!alloc_[device])
+    alloc_[device] = New<TensorAllocator>(params->getBackend());
+
+  if(!mt_[device] || mt_[device]->size() < params->size()) {
+    LOG(info, "Alloc {}", params->shape());
+    // int elements = (int)params->size();
+    alloc_[device]->reserveExact(params->memory()->size());
+    alloc_[device]->allocate(mt_[device], params->shape());
+  }
+  auto mt2 = mt_[device]->subtensor(0, params->size());
+  mt2->shape() = params->shape();
+  mt2->copyFrom(params);
+     
+        getNBestList(/*in*/   mt2,   // [currentDimBatch, 1, maxBeamSize, dimVocab or dimShortlist]
+                     /*N=*/   beamSize_,                 // desired beam size
+                     /*out*/  ns,
+                     /*out*/  nk,
+                     /*first=*/ 1); // @TODO: this is only used for checking presently, and should be removed altogether
        
         int vocabSize = expandedPathScores->shape()[-1];
-     
         // nk is [currentDimBatch, beamSize_] flattened. Extract the words from there
         for (int kk=0;kk< nk.size() ;kk++) {
             int batchId = (nk[kk] / vocabSize) / tmp->shape()[-2];
@@ -509,7 +527,7 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
                   /*N=*/    maxBeamSize,                 // desired beam size
                   /*out*/   nBestPathScores,
                    /*out*/  nBestKeys,
-                  /*first=*/0 || (t == 0 && factorGroup == 0)); // @TODO: this is only used for checking presently, and should be removed altogether
+                  /*first=*/t == 0 && factorGroup == 0); // @TODO: this is only used for checking presently, and should be removed altogether
       // Now, nBestPathScores contain N-best expandedPathScores for each batch and beam,
       // and nBestKeys for each their original location (batchIdx, beamHypIdx, word).
       // combine N-best sets with existing search space (beams) to updated search space
