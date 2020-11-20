@@ -22,10 +22,28 @@ public:
       // LOG(info, "{} {}", hyp->alt_words.size());
       if (past.size())
         buffer << past <<" ||| ";
-      past = (*vocab_)[hyp->getWord()];
+
+      std::vector<std::string> word_seq;
+      std::vector<float> word_prob = hyp->alt_scores; //make a copy so we dont modify the original
+      for (auto w: hyp->alt_words)
+        word_seq.push_back((*vocab_)[w]);
+
+      // to simplify further post-process, set the first alts to be the chosen one, even it is not the most probable
+      for (int i = 1;i < word_seq.size(); i++)
+        if (past == word_seq[i]) {
+          word_seq[i] = word_seq[0];
+          // swap
+          std::swap(word_prob[i], word_prob[0]);
+          break;
+        }
+      if (word_seq.size()) word_seq[0] = past;
+
       for (int i = 0;i < hyp->alt_words.size(); i++)
-        buffer << " " << (*vocab_)[hyp->alt_words[i]] << " "<<hyp->alt_scores[i];
+        buffer << " " << word_seq[i] << " "<<word_prob[i];
+
       outputs.push_back(buffer.str());
+
+      past = (*vocab_)[hyp->getWord()];
       hyp = hyp->getPrevHyp().get();
     }
 
