@@ -1,4 +1,5 @@
 #pragma once
+#include <set>
 
 #include "common/definitions.h"
 #include "common/file_stream.h"
@@ -30,6 +31,9 @@ private:
   WordAlignment alignment_;
 
 public:
+  std::vector<std::vector<float>> altWeights_;
+  std::vector<Words> altWords_;
+
   typedef Words value_type;
 
   /**
@@ -96,7 +100,7 @@ public:
    * target tokens. If not, it aborts. Because of this, this function must becalled *after*
    * adding source and target tokens.
    */
-  void setWeights(const std::vector<float>& weights);
+  void setWeights(std::vector<float>& weights);
 
   const WordAlignment& getAlignment() const { return alignment_; }
   void setAlignment(const WordAlignment& alignment) { alignment_ = alignment; }
@@ -240,6 +244,7 @@ protected:
   std::vector<float> dataWeights_;
 
 public:
+
   CorpusBatch(const std::vector<Ptr<SubBatch>>& subBatches)
     : subBatches_(subBatches) {}
 
@@ -371,7 +376,7 @@ public:
    */
   std::vector<Ptr<Batch>> split(size_t n, size_t sizeLimit /*=SIZE_MAX*/) override {
     ABORT_IF(size() == 0, "Encoutered batch size of 0");
-
+    LOG_ONCE(info, "SPLIIIIITTTTT {}", n);
     std::vector<std::vector<Ptr<SubBatch>>> subs; // [subBatchIndex][streamIndex]
     // split each stream separately
     for(auto batchStream : subBatches_) {
@@ -433,11 +438,28 @@ public:
 
       for(auto split : splits) {
         auto cb = std::static_pointer_cast<CorpusBatch>(split);
+        cb->altWeights_.clear(); cb->altWords_.clear();
+
         size_t width = 1;                   // One weight per sentence in case of sentence-level weights
         if(dataWeights_.size() != oldSize)  // if number of weights does not correspond to number of sentences we have word-level weights
           width = cb->back()->batchWidth(); // splitting also affects width, hence we need to accomodate this here
         std::vector<float> ws(width * split->size(), 1.0f);
 
+        // split alt weights
+        int N = altWeights_.size();
+        std::vector<float> aprob(width * split->size(), 1.0f);
+        Words aword(width * split->size(), Word::ZERO);
+        for (int i = 0; i < N; i++) {
+          for(size_t s = 0; s < width; ++s) {
+            for(size_t b = 0; b < split->size(); ++b) {
+              aprob[s * split->size() + b] = altWeights_[i][s * oldSize + b + pos]; // @TODO: use locate() as well
+              aword[s * split->size() + b] = altWords_  [i][s * oldSize + b + pos];
+            }
+          }
+          split->altWeights_.push_back(aprob);
+          split->altWords_.push_back(aword);
+        }
+        
         // this needs to be split along the batch dimension
         // which is here the innermost dimension.
         // Should work for sentence-based weights, too.
@@ -554,8 +576,10 @@ protected:
    * @brief Index of the file with weights in paths_ and files_; -1 means no
    * weights file provided.
    */
-  int weightFileIdx_{-1};
+  std::set<int> weightFileIdxSet_;
+  std::set<int> wordFileIdxSet_;
 
+  int weightFileIdx_{-1};
   /**
    * @brief Index of the file with alignments in paths_ and files_; -1 means
    * no alignment file provided.
@@ -582,6 +606,7 @@ protected:
    * sentence tuple.
    */
   void addWeightsToSentenceTuple(const std::string& line, SentenceTuple& tup) const;
+  void addAltWordsToSentenceTuple(const std::string& line, SentenceTuple& tup) const;
 
   void addAlignmentsToBatch(Ptr<CorpusBatch> batch, const std::vector<Sample>& batchVector);
 

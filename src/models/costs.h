@@ -58,24 +58,67 @@ public:
              Ptr<ExpressionGraph> graph,
              Ptr<data::Batch> batch,
              bool clearGraph = true) override {
+
+    LOG_ONCE(info, "USING EncoderDecoderCECost");
+
     auto encdec = std::static_pointer_cast<EncoderDecoder>(model);
     auto corpusBatch = std::static_pointer_cast<data::CorpusBatch>(batch);
 
     auto state = encdec->stepAll(graph, corpusBatch, clearGraph);
 
-    Expr weights;
-    if(toBeWeighted_)
-      weights = weighter_->getWeights(graph, corpusBatch);
-
     // multi-objective training
     Ptr<MultiRationalLoss> multiLoss = newMultiLoss(options_);
 
-    // @TODO: adapt to multi-objective training with multiple decoders
-    auto partialLoss = loss_->apply(state->getLogProbs(),
+
+    int dimBatch = (int)corpusBatch->size();
+    int dimWords = (int)corpusBatch->back()->batchWidth();
+
+    int N = corpusBatch->altWeights_.size();
+    LOG_ONCE(info, " ALT WEIGHT SIZE {}", N);
+    static bool done = false;
+    if (N == 0) {
+      // auto state = encdec->stepAll(graph, corpusBatch, clearGraph);
+      auto partialLoss = loss_->apply(state->getLogProbs(),
                                     state->getTargetWords(),
+                                    state->getTargetMask());
+
+      multiLoss->push_back(partialLoss);
+    }
+    for (int i = 0; i < N; i++) {
+      // auto state = encdec->stepAll(graph, corpusBatch, clearGraph);
+
+      if (!done) {
+        LOG(info, " AAAAAA {}", i);
+        LOG(info, "Words   : {} vs {}", state->getTargetWords().size(), corpusBatch->altWords_[i].size());
+        LOG(info, "weights : {} vs {}", corpusBatch->getDataWeights().size(), corpusBatch->altWeights_[i].size()); 
+      }
+      Expr weights;
+      if(toBeWeighted_) {
+       LOG_ONCE(info, "CLEAR MY WEIGHT");
+       // std::vector<float> wot(corpusBatch->altWeights_[i].size());
+       // std::fill(corpusBatch->altWeights_[i].begin(), corpusBatch->altWeights_[i].end(), 0.0);
+       // std::fill(corpusBatch->getDataWeights().begin(), corpusBatch->getDataWeights().end(), 0.0);
+       weights = graph->constant({1, dimWords, dimBatch, 1},
+                                 inits::fromVector(corpusBatch->altWeights_[i]));
+      }
+      if (!done) {
+        // auto& vocab = corpusBatch->back()->vocab();    
+        int ii = 0; for (auto w:corpusBatch->altWords_[i])   LOG(info,"word {} - {}", state->getTargetWords()[ii++].toString(), w.toString());
+        int jj = 0; for (auto v:corpusBatch->altWeights_[i]) LOG(info, "weight {} - {} | {}", corpusBatch->getDataWeights()[jj++], v, toBeWeighted_); 
+        done = true;
+      }
+      //  weights = weighter_->getWeights(graph, corpusBatch);
+      // std::string S;
+      // state->getTargetMask()->debug(S);
+      // std::cout << S << std::endl;
+      // batch->debug();
+      // @TODO: adapt to multi-objective training with multiple decoders
+      auto partialLoss = loss_->apply(state->getLogProbs(),
+                                    corpusBatch->altWords_[i], // state->getTargetWords(),
                                     state->getTargetMask(),
                                     weights);
-    multiLoss->push_back(partialLoss);
+      multiLoss->push_back(partialLoss);
+    }
 
     if(options_->get("guided-alignment", std::string("none")) != "none" && !inference_) {
       auto attentionVectors = encdec->getDecoders()[0]->getAlignments(); // [tgt index][beam depth, max src length, batch size, 1]
@@ -112,6 +155,7 @@ public:
              Ptr<data::Batch> batch,
              bool clearGraph = true) override {
 
+    LOG_ONCE(info, "USING EncoderClassiferrCECost");
     auto enccls = std::static_pointer_cast<EncoderClassifier>(model);
     auto corpusBatch = std::static_pointer_cast<data::CorpusBatch>(batch);
 

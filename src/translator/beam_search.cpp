@@ -473,6 +473,7 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
       std::vector<float> nBestPathScores, ns;  // [currentDimBatch, maxBeamSize] flattened
  
       // get alternative words for each of the current words
+      if (false) 
       for (int bm=0;bm < beamSize_; bm++) {
         nk.clear(); ns.clear();
         // process the bm-th candidate

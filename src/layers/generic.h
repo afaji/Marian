@@ -131,7 +131,7 @@ public:
     size_t getNumFactorGroups() const { return logits_.size(); }
     bool empty() const { return logits_.empty(); }
     Logits withCounts(const Expr& count) const; // create new Logits with 'count' implanted into all logits_
-private:
+// private:
     // helper functions
     Ptr<ExpressionGraph> graph() const;
     Expr constant(const Shape& shape, const std::vector<float>&    data) const { return graph()->constant(shape, inits::fromVector(data), Type::float32); }

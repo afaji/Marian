@@ -89,7 +89,9 @@ SentenceTuple Corpus::next() {
 
       if(i > 0 && i == alignFileIdx_) {
         addAlignmentToSentenceTuple(line, tup);
-      } else if(i > 0 && i == weightFileIdx_) {
+      } else if(i > 0 && wordFileIdxSet_.find(i) != wordFileIdxSet_.end()) {
+        addAltWordsToSentenceTuple(line, tup);
+      } else if(i > 0 && weightFileIdxSet_.find(i) != weightFileIdxSet_.end()) {
         addWeightsToSentenceTuple(line, tup);
       } else {
         if(tsv_) {  // split TSV input and add each field into the sentence tuple

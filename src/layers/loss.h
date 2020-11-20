@@ -344,12 +344,27 @@ protected:
 
   virtual Expr compute(Logits logits, const Words& labels,
                        Expr mask = nullptr, Expr labelWeights = nullptr) override {
+
+    // LOG(info, "LOGITS {}", logits->shape());
+    // LOG(info, "Indics {}", indices->shape());
     // logits may be factored; in that case, the getLoss() function computes one loss for each, and sums them up
     int inFactor = false;
+    // Expr indicesAlt;
+    
+    // for (auto w: labels) LOG(info, "{}", w.toWordIndex());
+    
+    // std::vector<uint32_t> data;
+    // for (int i= 1; i < labels.size(); i++) data.push_back(3);
+    // indicesAlt = logits.constant(data);
+
     auto ce = logits.applyLossFunction(labels, [&](Expr logits, Expr indices) {
       logits = atleast_3d(logits); // we always assuma a time and batch dimension exists.
       // for bert training or classification the time dimension is lot.
       // Here safeguard against 2d classifier output, adds 1 on the left, non-op.
+      
+      // LOG(info, "Indieces  {}", indices->shape());
+      // LOG(info, "Ind sampl {}", indices->val()->get(0));
+
       Expr ce = cast(cross_entropy(logits, indices), Type::float32);
       if (inFactor && factorWeight_ != 1.0f) {
         LOG_ONCE(info, "scaling factor losses with weight {}", factorWeight_);
@@ -373,12 +388,20 @@ protected:
     if(mask)
       ce = ce * cast(mask, Type::float32);
 
+    //auto ce2 = ce->val();
+    std::vector<float> dude;
+    // ce->val()->get(dude);
+    // LOG(info, "SHAPE {}", ce->shape());
+    // LOG(info, "vals {}", dude.size());
     if(labelWeights) {
+      // LOG(info, "WEIGHT {}", labelWeights->shape());
       // We currently do not know how to use target factors and word-level label weights together
       bool wordlevel = labelWeights->shape()[-3] > 1; // Time-dimension is not trivially 1, hence we have word-level weights.
       ABORT_IF(wordlevel && logits.getNumFactorGroups() > 1, "CE loss with word-level label weights is not implemented for factors");
       ce = ce * cast(labelWeights, Type::float32);
     }
+
+    //LOG(info, "SHAPE {} = {} {} {}", ce->shape(), ce2->get(0), ce2->get(1), ce2->get(2));
 
     return ce;
   }

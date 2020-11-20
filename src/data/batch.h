@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "data/dataset.h"
 #include "common/definitions.h"
 
 namespace marian {
@@ -9,6 +10,9 @@ namespace data {
 
 class Batch {
 public:
+  std::vector<std::vector<float>> altWeights_;
+  std::vector<Words> altWords_;
+
   virtual size_t size() const = 0;
   virtual size_t words(int /*which*/ = 0) const { return 0; };
   virtual size_t width() const { return 0; };

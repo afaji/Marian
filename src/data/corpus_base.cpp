@@ -372,18 +372,33 @@ CorpusBase::CorpusBase(Ptr<Options> options, bool translate)
       files_.emplace_back(strm);
     }
 
+    int altSize = 3;
+    for (int sz = 0; sz < altSize; sz++) {
     if(useDataWeighting) {
-      auto path = options_->get<std::string>("data-weighting");
+      auto path = options_->get<std::string>("data-weighting") + (char)('0' + sz) + ".word";
 
       ABORT_IF(!filesystem::exists(path), "Weight file does not exist");
-      LOG(info, "[data] Using weights from file {}", path);
+      LOG(info, "[data] HMMM {} Using probs from file {}", (int)paths_.size(), path);
 
-      weightFileIdx_ = (int)paths_.size();
+      wordFileIdxSet_.insert((int)paths_.size());
       paths_.emplace_back(path);
       io::InputFileStream* strm = new io::InputFileStream(path);
       ABORT_IF(strm->empty(), "File with weights '{}' is empty", path);
       files_.emplace_back(strm);
     }
+    if(useDataWeighting) {
+      auto path = options_->get<std::string>("data-weighting")  + (char)('0' + sz) + ".prob";
+
+      ABORT_IF(!filesystem::exists(path), "Weight file does not exist");
+      LOG(info, "[data] {} Using weights from file {}", (int)paths_.size(), path);
+      weightFileIdx_ = (int)paths_.size();
+      weightFileIdxSet_.insert((int)paths_.size());
+      paths_.emplace_back(path);
+      io::InputFileStream* strm = new io::InputFileStream(path);
+      ABORT_IF(strm->empty(), "File with weights '{}' is empty", path);
+      files_.emplace_back(strm);
+    }
+  }
   }
 }
 
@@ -433,7 +448,45 @@ void CorpusBase::addWeightsToSentenceTuple(const std::string& line, SentenceTupl
     if(rightLeft_)
       std::reverse(weights.begin(), weights.end());
 
-    tup.setWeights(weights);
+    if (tup.altWeights_.size() == 0)
+      tup.setWeights(weights);
+    else {
+     // LOG_ONCE(info, "CLEAR WEIGHT FOR ALT > 1");
+     // for (int i=0;i<weights.size();i++) weights[i] = 0.0;
+    }
+    tup.altWeights_.push_back(weights);
+  }
+}
+
+void CorpusBase::addAltWordsToSentenceTuple(const std::string& line, SentenceTuple& tup) const {
+  
+  // LOG(info, "ori {}", line);
+  auto elements = utils::split(line, " ");
+  // auto oldWords = tup.back();
+  // for (auto w: oldWords)
+  //  LOG(info, "OLD {}", (*vocabs_[1])[w]);
+  
+  if(!elements.empty()) {
+    if (tup.altWords_.size() == 0) tup.back().clear();
+    std::vector<Word> words;
+    for(auto& e : elements) {                             // Iterate weights as strings
+      if(maxLengthCrop_ && words.size() >= maxLength_)  // Cut if the input is going to be cut
+        break;
+      Word w = (*vocabs_[1])[e];
+      // LOG(info, "MAU PASANG {} : {} | {}", w.toString(),(*vocabs_[1])[w], e);
+      if (tup.altWords_.size() == 0)
+        tup.back().push_back(w);
+      
+      words.push_back(w);
+      //wei.emplace_back(std::stof(e));                 // Add a weight converted into float
+    }
+
+   tup.altWords_.push_back(words);
+    // LOG(info,"add altwords {}", tup.altWords_.size());
+    // LOG(info,"{} vs {}", tup.back().size(), elements.size());
+    if(rightLeft_)
+      std::reverse(words.begin(), words.end());
+   // tup.setWeights(weights);
   }
 }
 
@@ -475,9 +528,27 @@ void CorpusBase::addWeightsToBatch(Ptr<CorpusBatch> batch,
       }
     }
   }
-
+  LOG_ONCE(info, "taro ke batch {}", batchVector[0].altWeights_.size());
+  for (int as = 0; as < batchVector[0].altWeights_.size(); as++) {
+    std::vector<float> altWeights(size, 1.f);
+    Words altWords(size, Word::ZERO);
+    for(int b = 0; b < dimBatch; ++b) {
+      size_t i = 0;
+      for (auto w: batchVector[b].altWeights_[as]) {
+        altWeights[b + i * dimBatch] = w;
+        altWords  [b + i * dimBatch] = batchVector[b].altWords_[as][i];
+        ++i;
+      }
+    }
+    batch->altWeights_.push_back(altWeights);
+    batch->altWords_.push_back(altWords);
+  }
+  
   batch->setDataWeights(weights);
+  LOG_ONCE(info, "done taro ke batch {}", batch->altWeights_.size());
+  // batch->debug();
 }
+
 
 void CorpusBase::initEOS(bool training = true) {
   // Labels fed into sub-batches that are just class-labels, not sequence labels do not require to
@@ -542,9 +613,11 @@ size_t CorpusBase::getNumberOfTSVInputFields(Ptr<Options> options) {
   return 0;
 }
 
-void SentenceTuple::setWeights(const std::vector<float>& weights) {
+void SentenceTuple::setWeights(std::vector<float>& weights) {
   if(weights.size() != 1) {  // this assumes a single sentence-level weight is always fine
     ABORT_IF(empty(), "Source and target sequences should be added to a tuple before data weights");
+    // while (weights.size() > back().size()) weights.pop_back();
+    // while (weights.size() < back().size()) weights.push_back(1.0);
     auto numWeights = weights.size();
     auto numTrgWords = back().size();
     // word-level weights may or may not contain a weight for EOS tokens
