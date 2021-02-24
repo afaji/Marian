@@ -473,7 +473,7 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
       std::vector<float> nBestPathScores, ns;  // [currentDimBatch, maxBeamSize] flattened
  
       // get alternative words for each of the current words
-      for (int bm=0;bm < beamSize_; bm++) {
+      for (int bm=0;bm < maxBeamSize; bm++) {
         nk.clear(); ns.clear();
         // process the bm-th candidate
         auto tmp = slice(logProbs, 0, bm);
@@ -491,7 +491,7 @@ Histories BeamSearch::search(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> 
            alloc_[device] = New<TensorAllocator>(params->getBackend());
 
         if(!mt_[device] || mt_[device]->size() < params->size()) {
-           LOG(info, "Alloc {}", params->shape());
+           // LOG(info, "Alloc {}", params->shape());
            // int elements = (int)params->size();
            alloc_[device]->reserveExact(params->memory()->size());
            alloc_[device]->allocate(mt_[device], params->shape());
